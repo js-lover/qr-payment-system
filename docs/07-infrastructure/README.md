@@ -32,8 +32,8 @@ graph TD
     end
 
     subgraph DMZ [DMZ - Güvenli Bölge]
-        GW[API Gateway\nKong / AWS]
-        LB[Load Balancer\nNGINX]
+        GW[API Gateway - Kong]
+        LB[Load Balancer - NGINX]
     end
 
     subgraph Services [Mikroservis Katmanı]
@@ -46,13 +46,13 @@ graph TD
     end
 
     subgraph DataLayer [Veri Katmanı]
-        Kafka[(Apache Kafka\nMessage Broker)]
-        Redis[(Redis 7\nCache + TTL)]
-        MSSQL_Auth[(MSSQL\nauth_db)]
-        MSSQL_Wallet[(MSSQL\nwallet_db)]
-        MSSQL_Trans[(MSSQL\ntransactions_db)]
-        MSSQL_OB[(MSSQL\nonboarding_db)]
-        ES[(Elasticsearch\nReporting Index)]
+        Kafka[(Apache Kafka)]
+        Redis[(Redis 7)]
+        MSSQL_Auth[(MSSQL - auth_db)]
+        MSSQL_Wallet[(MSSQL - wallet_db)]
+        MSSQL_Trans[(MSSQL - transactions_db)]
+        MSSQL_OB[(MSSQL - onboarding_db)]
+        ES[(Elasticsearch)]
     end
 
     Client & POS --> LB --> GW
@@ -214,18 +214,18 @@ graph LR
     end
 
     subgraph WalletGroup [Consumer Group: wallet-group]
-        W1[Wallet Consumer 1\nP0, P1]
-        W2[Wallet Consumer 2\nP2, P3]
-        W3[Wallet Consumer 3\nP4, P5]
+        W1["Wallet Consumer 1 - P0, P1"]
+        W2["Wallet Consumer 2 - P2, P3"]
+        W3["Wallet Consumer 3 - P4, P5"]
     end
 
     subgraph QRGroup [Consumer Group: qr-group]
-        Q1[QR Consumer 1\nP0-P5]
+        Q1[QR Consumer 1 - P0-P5]
     end
 
     subgraph ReportGroup [Consumer Group: reporting-group]
-        R1[Report Consumer 1\nP0, P1, P2]
-        R2[Report Consumer 2\nP3, P4, P5]
+        R1["Report Consumer 1 - P0, P1, P2"]
+        R2["Report Consumer 2 - P3, P4, P5"]
     end
 
     P0 & P1 --> W1

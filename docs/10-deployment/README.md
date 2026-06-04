@@ -344,20 +344,20 @@ spec:
 ```mermaid
 flowchart LR
     subgraph Dev [Geliştirici]
-        A[git push\nfeature branch]
+        A[git push - feature branch]
     end
 
     subgraph CI [CI - GitHub Actions]
-        B[Unit Tests\ndotnet test]
-        C[Integration Tests\nTestContainers]
-        D[Security Scan\nTrivy + SAST]
-        E[Docker Build\n& Push to Registry]
+        B[Unit Tests - dotnet test]
+        C[Integration Tests - TestContainers]
+        D[Security Scan - Trivy + SAST]
+        E[Docker Build and Push]
     end
 
     subgraph CD [CD - ArgoCD]
-        F[Staging Deploy\nAuto]
-        G[Smoke Tests\nk6 load test]
-        H[Production Deploy\nManual Approval]
+        F[Staging Deploy - Auto]
+        G[Smoke Tests - k6 load test]
+        H[Production Deploy - Manual Approval]
     end
 
     A --> B --> C --> D --> E

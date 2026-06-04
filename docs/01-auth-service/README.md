@@ -40,22 +40,22 @@ graph TD
         C[🖨️ POS Terminal]
     end
 
-    subgraph API Gateway [API Gateway - Kong/AWS]
-        D[Auth Middleware\nJWT Validate]
+    subgraph API Gateway [API Gateway]
+        D[Auth Middleware - JWT Validate]
     end
 
     subgraph AuthService [Auth Service - .NET 10]
-        E[/token - OAuth 2.0 Endpoint/]
-        F[/token/refresh/]
-        G[/token/revoke/]
-        H[/terminal/verify - HMAC Check/]
-        I[Token Factory\nJWT Builder]
+        E["/token - OAuth 2.0"]
+        F["/token/refresh"]
+        G["/token/revoke"]
+        H["/terminal/verify - HMAC"]
+        I[Token Factory - JWT Builder]
         J[HMAC Validator]
     end
 
     subgraph Storage
-        K[(MSSQL\nauth_db)]
-        L[(Redis\nRevoked Token Blacklist)]
+        K[(MSSQL - auth_db)]
+        L[(Redis - Token Blacklist)]
     end
 
     A -->|POST /auth/token| E

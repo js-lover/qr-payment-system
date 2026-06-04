@@ -40,27 +40,26 @@ Transaction Service, ödeme sürecinin **bankacılık çekirdeğiyle** konuşan 
 ## 2. Architecture & Bounded Context (Mimari ve Sınırlar)
 
 ```mermaid
-graph TD
     subgraph Upstream
-        A[QR Code Service\nPOST /transaction/initiate]
+        A[QR Code Service]
     end
 
     subgraph TransactionService [Transaction Service - .NET 10]
-        B[Transaction API\nREST Endpoint]
+        B[Transaction API]
         C[ISO 8583 Message Builder]
-        D[Bank Connector\nTCP Client - jPOS port veya .NET parser]
+        D[Bank Connector - TCP Client]
         E[Response Handler]
-        F[Reversal Worker\n.NET BackgroundService]
+        F[Reversal Worker - BackgroundService]
         G[Event Publisher]
         H[Idempotency Guard]
     end
 
     subgraph BankCore [Banka Core Sistemi]
-        I[🏦 ISO 8583 Switch]
+        I["🏦 ISO 8583 Switch"]
     end
 
     subgraph Storage
-        J[(MSSQL\ntransactions_db)]
+        J[(MSSQL - transactions_db)]
     end
 
     subgraph MessageBroker [Apache Kafka]
@@ -191,29 +190,29 @@ stateDiagram-v2
 
 ```mermaid
 graph LR
-    subgraph Request [0200 — Financial Transaction Request]
+    subgraph Request [0200 - Financial Transaction Request]
         R1[MTI: 0200]
-        R2[Field 2: PAN\nMasked wallet_id]
-        R3[Field 3: Processing Code\n000000 - Purchase]
-        R4[Field 4: Amount\n000000005000]
-        R5[Field 7: Transmission DateTime\nMMDDhhmmss]
-        R6[Field 11: STAN\n123456]
-        R7[Field 12: Local Time\nhhmmss]
-        R8[Field 13: Local Date\nMMDD]
-        R9[Field 18: MCC\n5411 - Grocery]
-        R10[Field 37: Retrieval Ref No\nUnique 12-char]
-        R11[Field 41: Terminal ID\nTERM-001]
-        R12[Field 42: Merchant ID\nMERCH-XOX-999]
-        R13[Field 43: Merchant Name\nAhmet Market Istanbul TR]
-        R14[Field 49: Currency Code\n949 - TRY]
-        R15[Field 61: QR Token\n8f3b9a2c-d91e...]
+        R2["Field 2: PAN - Masked wallet_id"]
+        R3["Field 3: Processing Code - 000000 Purchase"]
+        R4["Field 4: Amount - 000000005000"]
+        R5["Field 7: Transmission DateTime - MMDDhhmmss"]
+        R6["Field 11: STAN - 123456"]
+        R7["Field 12: Local Time - hhmmss"]
+        R8["Field 13: Local Date - MMDD"]
+        R9["Field 18: MCC - 5411 Grocery"]
+        R10["Field 37: Retrieval Ref No - 12-char"]
+        R11["Field 41: Terminal ID - TERM-001"]
+        R12["Field 42: Merchant ID - MERCH-XOX-999"]
+        R13["Field 43: Merchant Name - Ahmet Market"]
+        R14["Field 49: Currency Code - 949 TRY"]
+        R15["Field 61: QR Token - uuid..."]
     end
 
-    subgraph Response [0210 — Financial Transaction Response]
+    subgraph Response [0210 - Financial Transaction Response]
         P1[MTI: 0210]
-        P2[Field 39: Response Code\n00 / 51 / 91 / 05]
-        P3[Field 38: Auth Code\nOnay kodu - başarılı ise]
-        P4[Field 37: Retrieval Ref No\nEcho]
+        P2["Field 39: Response Code - 00/51/91/05"]
+        P3["Field 38: Auth Code - onay kodu"]
+        P4["Field 37: Retrieval Ref No - Echo"]
         P5[Field 11: STAN Echo]
     end
 ```

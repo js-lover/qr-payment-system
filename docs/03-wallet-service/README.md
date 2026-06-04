@@ -41,29 +41,28 @@ Wallet Service, sistemdeki tüm para hareketlerinin tek kaynağı (single source
 ## 2. Architecture & Bounded Context (Mimari ve Sınırlar)
 
 ```mermaid
-graph TD
     subgraph Clients
         A[📱 Müşteri App]
-        B[Kafka Consumer\nCustomerApprovedEvent]
-        C[Kafka Consumer\nPaymentSuccessEvent]
-        D[Kafka Consumer\nPaymentFailedEvent]
+        B[Kafka Consumer - CustomerApprovedEvent]
+        C[Kafka Consumer - PaymentSuccessEvent]
+        D[Kafka Consumer - PaymentFailedEvent]
     end
 
     subgraph WalletService [Wallet & Account Service - .NET 10]
-        E[Wallet API\nCRUD + Balance]
+        E[Wallet API - CRUD + Balance]
         F[Top-up Module]
-        G[Provision Manager\nBloke / Unbloke]
-        H[Ledger Writer\nDouble-Entry Engine]
+        G[Provision Manager - Bloke / Unbloke]
+        H[Ledger Writer - Double-Entry Engine]
         I[Event Publisher]
     end
 
     subgraph Storage
-        J[(MSSQL\nwallet_db\nledger_entries\nwallet_accounts\nprovisions)]
+        J[(MSSQL - wallet_db)]
     end
 
     subgraph Downstream
-        K[Kafka\nWalletCreditedEvent\nBalanceUpdatedEvent]
-        L[Reporting Service\nLedger Consumer]
+        K[Kafka - WalletCreditedEvent]
+        L[Reporting Service]
     end
 
     A -->|GET /wallet/balance| E
@@ -80,10 +79,10 @@ graph TD
 ```mermaid
 graph LR
     subgraph Accounts [Hesap Planı]
-        PA[🏦 Banka Havuz Hesabı\npool_account]
-        CA[👤 Müşteri Cüzdanı\ncustomer_wallet]
-        MA[🏪 İşyeri Cüzdanı\nmerchant_wallet]
-        FEE[💰 Komisyon Hesabı\nfee_account]
+        PA["🏦 Banka Havuz Hesabı - pool_account"]
+        CA["👤 Müşteri Cüzdanı - customer_wallet"]
+        MA["🏪 İşyeri Cüzdanı - merchant_wallet"]
+        FEE["💰 Komisyon Hesabı - fee_account"]
     end
 
     PA -->|Top-up: Credit| CA

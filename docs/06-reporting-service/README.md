@@ -39,8 +39,7 @@ Reporting & Ledger Service, sistemin **geriye dönük hafızasıdır**. İşlem 
 ## 2. Architecture & Bounded Context (Mimari ve Sınırlar)
 
 ```mermaid
-graph TD
-    subgraph Kafka [Apache Kafka — Event Streams]
+    subgraph Kafka [Apache Kafka - Event Streams]
         E1[PaymentSuccessEvent]
         E2[PaymentFailedEvent]
         E3[ReversalInitiatedEvent]
@@ -48,23 +47,23 @@ graph TD
     end
 
     subgraph ReportingService [Reporting & Ledger Service - .NET 10]
-        C1[Kafka Consumer Group\nreporting-group]
-        C2[Event Normalizer\nDenormalization Layer]
+        C1[Kafka Consumer Group - reporting-group]
+        C2[Event Normalizer]
         C3[Elasticsearch Writer]
-        C4[Reconciliation Worker\n.NET BackgroundService]
-        C5[Receipt Generator\nPDF / HTML]
-        C6[Report API\nREST Endpoints]
+        C4[Reconciliation Worker]
+        C5[Receipt Generator - PDF]
+        C6[Report API]
     end
 
     subgraph Storage
-        ES[(Elasticsearch\nIndeksler: transactions, wallets, merchants)]
-        MSSQL[(MSSQL\nreconciliation_db\ndaily_summaries)]
+        ES[(Elasticsearch - transactions index)]
+        MSSQL[(MSSQL - reconciliation_db)]
     end
 
     subgraph Consumers
-        D1[📱 Müşteri App\nEkstre / Makbuz]
-        D2[🏪 Merchant Portal\nGün Sonu Raporu]
-        D3[🛠️ Ops Dashboard\nAnomali / Volume]
+        D1["📱 Müşteri App - Ekstre"]
+        D2["🏪 Merchant Portal"]
+        D3["🛠️ Ops Dashboard"]
     end
 
     E1 & E2 & E3 & E4 --> C1
@@ -81,9 +80,9 @@ graph TD
 ```mermaid
 graph LR
     subgraph Indices
-        I1[transactions\nalias ile günlük rollover\ntransactions-2026.05.25]
-        I2[wallet_events\nTopup, Provision, Commit]
-        I3[merchant_summaries\nGünlük işlem özeti]
+        I1["transactions - gunluk rollover"]
+        I2["wallet_events - Topup Provision Commit"]
+        I3["merchant_summaries - Gunluk ozet"]
     end
 ```
 

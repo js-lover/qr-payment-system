@@ -33,24 +33,24 @@ Bu belge, sistemin tamamına uygulanan güvenlik katmanlarını ve politikaları
 ```mermaid
 graph TD
     subgraph Actors [Aktörler]
-        A[📱 Müşteri\nCustomer]
-        B[🌐 Merchant Panel]
-        C[🖨️ POS Terminal]
-        D[🛠️ Admin Panel]
+        A["📱 Müşteri"]
+        B["🌐 Merchant Panel"]
+        C["🖨️ POS Terminal"]
+        D["🛠️ Admin Panel"]
     end
 
     subgraph AuthMechanisms [Kimlik Doğrulama Mekanizmaları]
-        E[Username + Password\n+ TOTP 2FA]
+        E[Username + Password + TOTP 2FA]
         F[API Key + Secret Key]
-        G[mTLS Sertifika\n+ HMAC-SHA256 İmza]
-        H[SSO / OAuth 2.0\nAzure AD]
+        G[mTLS + HMAC-SHA256]
+        H[SSO / OAuth 2.0 - Azure AD]
     end
 
     subgraph Result [Çıktı]
-        I[JWT Access Token\n15 dk]
-        J[JWT Access Token\n1 saat]
-        K[Terminal Claim\nİstek bazlı]
-        L[Admin JWT\n8 saat]
+        I[JWT Access Token - 15 dk]
+        J[JWT Access Token - 1 saat]
+        K[Terminal Claim - istek bazlı]
+        L[Admin JWT - 8 saat]
     end
 
     A --> E --> I
@@ -248,7 +248,7 @@ graph TD
     end
 
     subgraph Pipeline [Log Pipeline]
-        ES[Elasticsearch\nSecurity Index]
+        ES[Elasticsearch - Security Index]
         Kibana[Kibana Dashboard]
         Alert[PagerDuty / Slack]
     end

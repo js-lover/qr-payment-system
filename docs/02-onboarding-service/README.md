@@ -44,18 +44,18 @@ graph TD
     end
 
     subgraph ExternalIntegrations [Dış Entegrasyonlar]
-        H[📡 SMS Gateway\nNetgsm / Twilio]
-        I[🔍 KYC Provider\nTCKN Doğrulama API]
+        H["📡 SMS Gateway - Netgsm / Twilio"]
+        I["🔍 KYC Provider - TCKN Doğrulama"]
         J[📧 Email Service]
     end
 
     subgraph Storage
-        K[(MSSQL\nonboarding_db)]
+        K[(MSSQL - onboarding_db)]
     end
 
     subgraph Downstream [Downstream Servisler - Event via Kafka]
-        L[Auth Service\n+ credential yazma]
-        M[Wallet Service\n+ cüzdan oluşturma]
+        L[Auth Service]
+        M[Wallet Service]
     end
 
     A --> C --> D

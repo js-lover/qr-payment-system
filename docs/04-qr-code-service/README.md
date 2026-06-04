@@ -49,18 +49,18 @@ graph TD
     subgraph QRService [QR Code Service - .NET 10]
         C[POST /qr/generate]
         D[GET /qr/validate/:token]
-        E[QR Image Renderer\nZXing.Net]
+        E[QR Image Renderer - ZXing.Net]
         F[Token Manager]
         G[Payment Initiator]
     end
 
     subgraph CacheLayer [Cache]
-        H[(Redis\nqr:{token} = payload\nTTL: 90s)]
+        H[(Redis - qr:token TTL:90s)]
     end
 
     subgraph Downstream
-        I[Wallet Service\nPOST /wallet/provision]
-        J[Transaction Service\nPOST /transaction/initiate]
+        I[Wallet Service]
+        J[Transaction Service]
     end
 
     A -->|mTLS + HMAC| C
