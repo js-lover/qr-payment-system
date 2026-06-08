@@ -39,6 +39,7 @@ Reporting & Ledger Service, sistemin **geriye dönük hafızasıdır**. İşlem 
 ## 2. Architecture & Bounded Context (Mimari ve Sınırlar)
 
 ```mermaid
+graph TD
     subgraph Kafka [Apache Kafka - Event Streams]
         E1[PaymentSuccessEvent]
         E2[PaymentFailedEvent]
@@ -281,50 +282,4 @@ CREATE TABLE reconciliation_reports (
 | **Veri Saklama Süresi** | İşlem kayıtları MASAK gereği 10 yıl; ES lifecycle policy (hot → warm → cold). |
 | **PII Maskeleme** | Elasticsearch'te müşteri adı tokenized; kişisel arama yalnızca admin rolünde. |
 
----
-
-## 7. Research & Open Questions (Yeni Başlayanlar İçin Araştırma Rehberi)
-
-> Bu bölüm, arama motorları, Kafka ve finansal raporlama konularına yeni başlayan backend geliştiriciler için hazırlanmıştır.
-> Her madde; **ne öğreneceğini**, **neden önemli olduğunu** ve **nereden başlayacağını** gösterir.
-
----
-
-- **📚 Elasticsearch nedir ve neden MSSQL yetmez?**
-  "Ahmet Market" adındaki tüm ödemeleri bul, veya bu haftaki en çok işlem yapan işyerini listele — bu tür sorgular MSSQL'de yavaş çalışır. Neden?
-  - MSSQL bir "row store" (satır bazlı) veritabanıdır. Elasticsearch ise tam metin araması ve aggregation için optimize edilmiş bir "inverted index" kullanır.
-  - `keyword` ve `text` field tipleri arasındaki farkı araştır: Neden `merchant_name`'i hem `text` hem `keyword` olarak indexledik?
-  - **Anahtar soru:** `transactions-2026.05.25` gibi günlük index ne anlama gelir? Neden tek bir büyük index yerine birden fazla index kullanıyoruz?
-
----
-
-- **📚 Kafka Consumer Group nasıl çalışır? Neden "reporting-group" ayrı?**
-  Kafka'da aynı topic'i hem Wallet Service hem de Reporting Service okuyor. Her ikisi de tüm mesajları alıyor mu?
-  - "Consumer group" kavramını araştır: Aynı group içindeki consumer'lar mesajları paylaşır (her mesaj bir kez okunur). Farklı group'lar bağımsız okur.
-  - `reporting-group` bağımsız olduğu için Reporting Service'in yavaş kalması Wallet Service'i etkilemez.
-  - **Anahtar soru:** Reporting Service 1 saat çökerse, yeniden başladığında kaçırdığı mesajları okuyabilir mi? (Cevap: Kafka offset ile evet!)
-
----
-
-- **📚 Mutabakat (Reconciliation) nedir? Bankacılıkta neden kritiktir?**
-  Her gece 02:00'de sistem iki farklı kaynaktaki tutarları karşılaştırıyor. Bu neden gerekli?
-  - Şu senaryoyu düşün: Banka işlemi başarılı saydı ama sistemimiz kaydetmedi. Müşteri para ödedi ama işyerine yansımadı. Nasıl fark ederiz?
-  - Reconciliation, iki sistemin "aynı gerçeği" görmesini doğrular.
-  - **Anahtar soru:** Mutabakatta 1 TL'lik fark bulundu. Bu önemli mi? Büyük sistemlerde "tolerated difference" politikası neden olur?
-
----
-
-- **📚 Eventual Consistency nedir? "Anlık" ile "neredeyse anlık" arasındaki fark?**
-  Ödeme tamamlandı, ama Reporting'de görünmesi birkaç saniye alabilir — çünkü Kafka'dan event okunup Elasticsearch'e yazılması gerekiyor.
-  - "Strong consistency" ile "Eventual consistency" arasındaki trade-off'u araştır.
-  - Müşteri "Ödedim ama ekstremi göremiyorum" derse ne yapmalıyız? (Hint: "Pending" durumu veya birkaç saniye beklet)
-  - **Anahtar soru:** Kafkadan gelen bir event'i Elasticsearch'e yazmadan önce servis çökerse ne olur? `enable.auto.commit=false` ne işe yarar?
-
----
-
-- **📚 PDF oluşturma (.NET'te nasıl yapılır?)**
-  Dijital makbuz PDF formatında üretiliyor. `.NET 10`'da bunu nasıl yaparsın?
-  - `QuestPDF` kütüphanesini araştır: Fluent API ile C# kodu yazarak PDF üretmek nasıl çalışır?
-  - Alternatif: HTML → PDF dönüşümü için `Puppeteer Sharp` veya `wkhtmltopdf` — hangi durumda hangisi tercih edilmeli?
-  - **Dene:** QuestPDF ile "Merheba Dünya" yazan bir PDF belgesi oluştur: [questpdf.com](https://www.questpdf.com/getting-started.html)
 

@@ -41,6 +41,7 @@ Wallet Service, sistemdeki tüm para hareketlerinin tek kaynağı (single source
 ## 2. Architecture & Bounded Context (Mimari ve Sınırlar)
 
 ```mermaid
+graph TD
     subgraph Clients
         A[📱 Müşteri App]
         B[Kafka Consumer - CustomerApprovedEvent]
@@ -287,52 +288,4 @@ stateDiagram-v2
 | **Audit Trail** | Her ledger kaydında `transaction_id` ile tam iz sürülebilirlik. |
 | **Separation of Duties** | Pool Account yalnızca Wallet Service'in internal hesabı; müşteri/merchant erişimi yok. |
 
----
-
-## 7. Research & Open Questions (Yeni Başlayanlar İçin Araştırma Rehberi)
-
-> Bu bölüm, finansal sistemler ve veritabanı yönetimine yeni başlayan backend geliştiriciler için hazırlanmıştır.
-> Her madde; **ne öğreneceğini**, **neden önemli olduğunu** ve **nereden başlayacağını** gösterir.
-
----
-
-- **📚 Double-Entry Bookkeeping (Çift Taraflı Muhasebe) nedir?**
-  Finansal sistemlerin temel kuralı: Para yoktan var olamaz, yok da olamaz. Her para hareketi iki tarafı olan bir kayıttır.
-  - 100 TL yüklendiğinde neden iki satır yazıyoruz? Sadece bakiyeyi `+100` yapmak yetmez mi?
-  - "T-account" (T-hesabı) kavramını araştır. Debit ve Credit'in muhasebedeki anlamı, sezgisel anlamından farklıdır!
-  - **Anahtar soru:** Eğer sadece `balance + 100` yapsan ve bir bug 50 TL'yi iki kez eklese, bunu nasıl fark ederdin? Double-entry bunu nasıl önler?
-
----
-
-- **📚 ACID nedir? Neden finansal sistemlerde kritiktir?**
-  Wallet Service'te her para hareketi `BEGIN TRANSACTION ... COMMIT` bloğu içinde. Bu neden gerekli?
-  - **A**tomicity: Ya hepsi olur ya hiçbiri. Debit yazılıp Credit yazılmazsa ne olur?
-  - **C**onsistency: `balance >= 0` constraint'ini araştır. DB katmanında kural koymak neden uygulama katmanından daha güvenlidir?
-  - **I**solation: İki kullanıcı aynı anda aynı cüzdandan ödeme yaparsa ne olur? (Race condition)
-  - **D**urability: Sunucu çöktükten sonra yazılan kayıt kaybolur mu?
-  - **Dene:** Aynı anda iki thread ile aynı bakiyeyi düşürmeyi dene. `UPDLOCK` olmadan ne olur?
-
----
-
-- **📚 Provision (Bloke) sistemi neden var? Neden direkt para kesmiyoruz?**
-  Müşteri "Öde" dediğinde para hemen kesilmiyor — önce "rezerv" (bloke) alınıyor. Neden bu ek adım gerekli?
-  - Şu senaryoyu düşün: Ödeme başlatıldı, banka yanıt verirken (30 saniye) müşteri ikinci bir ödeme daha başlattı. Her ikisi de "bakiye yeterli" görse ne olur?
-  - `available_balance = balance - active_provisions` farkını kavra.
-  - **Anahtar soru:** Provision alındıktan sonra banka "HAYIR" derse (yanıt kodu 51) provision nasıl geri alınır? Bu işlem başarısız olursa ne olur?
-
----
-
-- **📚 Ledger (Muhasebe Defteri) neden değiştirilemez (Immutable) olmalı?**
-  `ledger_entries` tablosunda `UPDATE` ve `DELETE` yetkisi uygulama kullanıcısından kaldırıldı. Neden?
-  - Gerçek bir banka defteriyle kıyas yap: Muhasebeci yanlış kayıt yaparsa satırı silmez, tersine bir kayıt (reversal) ekler.
-  - "Audit trail" nedir? Finansal denetimde her işlemin izlenebilir olması neden zorunludur?
-  - **Anahtar soru:** `BIGINT IDENTITY` olan `id` sütunu neden önemli? UUID yerine neden sıralı bir ID kullandık?
-
----
-
-- **📚 Database Deadlock nedir ve nasıl oluşur?**
-  Aynı anda binlerce ödeme geldiğinde MSSQL'de "deadlock" oluşabilir. Bu ne demek?
-  - Şu senaryoyu araştır: Thread A, Row 1'i kilitleyip Row 2'yi bekliyor. Thread B, Row 2'yi kilitleyip Row 1'i bekliyor. İkisi de sonsuza kadar bekler.
-  - `ISOLATION LEVEL` seçeneklerini araştır: `READ COMMITTED`, `SNAPSHOT`, `SERIALIZABLE` farkları neler?
-  - **Anahtar soru:** `WITH (UPDLOCK, ROWLOCK)` hint'i neden deadlock'u önler? (Hint: Tüm thread'ler aynı sırayla kilitleme yapar)
 

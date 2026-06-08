@@ -36,7 +36,7 @@ graph TD
 
     Wallet --> Kafka((Kafka / RabbitMQ Message Broker))
     Trans --> Kafka
-    Report <-- Kafka
+    Kafka --> Report
 ```
 
 ## 3. Data Flow & Actors (Veri Akışı ve Aktörler)
@@ -192,11 +192,3 @@ ISO 8583, bankacılık sistemlerinin birbiriyle konuştuğu bit-map tabanlı fin
 - **Faz 3:** Ödeme Çekirdeği (Transaction Service .NET 10 adaptasyonu ve ISO 8583 entegrasyonu).
 - **Faz 4:** Asenkron İletişim (Kafka entegrasyonları, WebSocket ile canlı kasa bildirimleri).
 - **Faz 5:** Raporlama ve Canlı Ortam (Ledger Service, Yük Testleri ve Go-Live).
-
-## 12. Research & Open Questions (Araştırılması Gereken Konular)
-
-- **Idempotency & Retry Mechanisms:** İşlem Timeout olduğunda gönderilecek `0420 Reversal` mesajlarının hedefe ulaşmaması durumunda, .NET Worker Service'ler üzerinde back-off retry politikalarının (Polly kütüphanesi vb.) nasıl yapılandırılacağı detaylandırılmalıdır.
-
-- **Double-Entry & Concurrency:** MSSQL üzerinde, aynı anda binlerce cüzdan hareketi (Top-up ve QR Ödeme) gelirken Deadlock veya Race Condition oluşmasını engellemek için `ISOLATION LEVEL` (örneğin Snapshot veya Serializable) stratejisi ne olmalıdır?
-
-- **ISO 8583 .NET 10 Entegrasyonu:** Dokümanda referans verilen jPOS kütüphanesi ağırlıklı Java ekosistemine aittir. Backend'in tamamen .NET 10'a çevrilmesi kararı doğrultusunda, ISO 8583 mesaj ayrıştırması için açık kaynaklı bir .NET kütüphanesi (Örn: `Truso.B1` veya custom bir parser) mi yazılacak yoksa ticari bir paket mi kullanılacak netleştirilmelidir.

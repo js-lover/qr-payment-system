@@ -62,6 +62,7 @@ erDiagram
         string tckn_hash
         string status
         smallint kyc_risk_score
+        datetime2 aml_checked_at
     }
 
     MERCHANTS {
@@ -69,6 +70,15 @@ erDiagram
         string company_name
         string tax_number UK
         string iban
+        varchar4 mcc
+        string status
+    }
+
+    STORES {
+        uuid id PK
+        uuid merchant_id FK
+        string store_name
+        string address
         string status
     }
 
@@ -126,6 +136,8 @@ erDiagram
     CUSTOMERS ..o{ CREDENTIALS : "user_id (event)"
     CUSTOMERS ..o{ WALLET_ACCOUNTS : "user_id (event)"
     TRANSACTIONS ..o{ PROVISIONS : "provision_id (event)"
+    MERCHANTS ||--o{ STORES : "merchant_id"
+    STORES ..o{ TERMINAL_REGISTRY : "store_id (event)"
 ```
 
 > **Noktalı çizgi (..o{):** Doğrudan FK ilişkisi değil, event ile bağlı servisler arası referans. JOIN yapılamaz.
@@ -362,49 +374,3 @@ sequenceDiagram
     Note over QR,ES: UUID-A her yerde aynı → izlenebilirlik sağlanır
 ```
 
----
-
-## 8. Research & Open Questions (Yeni Başlayanlar İçin Araştırma Rehberi)
-
-> Bu bölüm, veri modelleme ve veritabanı tasarımına yeni başlayan backend geliştiriciler için hazırlanmıştır.
-
----
-
-- **📚 UUID (GUID) vs sıralı integer ID — hangisi ne zaman kullanılır?**
-  `wallet_id`, `transaction_id` gibi alanlar UUID (örn: `8f3b9a2c-d91e-4a2b-b3c1`) kullanıyor. Neden `1, 2, 3` gibi basit ID yok?
-  - UUID'nin avantajı: Merkezi koordinasyon olmadan, birden fazla servis aynı anda ID üretebilir — çakışma olmaz.
-  - UUID'nin dezavantajı: Sıralı olmadığı için B-tree index performansı düşer (page fragmentation).
-  - **Anahtar soru:** `ledger_entries.id` sütunu neden `BIGINT IDENTITY` (sıralı)? Finansal defterde sıralı ID neden anlamlıdır?
-
----
-
-- **📚 Neden her servisin ayrı veritabanı var? Tek büyük DB olmaz mı?**
-  5 farklı veritabanı (auth_db, wallet_db, vb.) var. Hepsini tek bir DB'ye koysak daha kolay olmaz mıydı?
-  - "Database per service" pattern'ini araştır. Servisler arası direkt JOIN yerine event kullanmak ne anlama gelir?
-  - Tek DB'nin riski: Wallet Service'in yavaş sorgusu, Auth Service'i de yavaşlatır (shared resource).
-  - **Anahtar soru:** Onboarding Service'teki bir şema değişikliği (yeni sütun ekleme) diğer servisleri etkiler mi? Neden etkilemez?
-
----
-
-- **📚 `DECIMAL(18,2)` neden para için `FLOAT`'tan daha iyi?**
-  Para alanlarında `DECIMAL(18,2)` kullanılıyor. Neden `FLOAT` veya `DOUBLE` kullanılmıyor?
-  - Klasik örnek: `0.1 + 0.2` işlemini bir programlama dilinde yap. Sonuç `0.30000000004` olabilir. Bu finansal sistemde ne anlama gelir?
-  - DECIMAL fixed-point (sabit nokta) sayıdır — tam olarak temsil edilir.
-  - **Dene:** C# REPL'de `(0.1m + 0.2m) == 0.3m` ile `(0.1 + 0.2) == 0.3` sonuçlarını karşılaştır (`m` suffix = decimal).
-
----
-
-- **📚 ER diyagramı (Entity Relationship) nasıl okunur?**
-  Bu belgede `||--o{` gibi semboller görüyorsun. Bunlar Crow's Foot notation (Kaz Ayağı notasyonu).
-  - `||` = tam olarak bir (exactly one)
-  - `o{` = sıfır veya çok (zero or many)
-  - `||--o{` = "bir wallet_account'ın sıfır veya çok ledger_entry'si olabilir"
-  - **Dene:** [dbdiagram.io](https://dbdiagram.io) sitesine gir ve basit bir şemayı görsel olarak çiz.
-
----
-
-- **📚 Soft Delete nedir? Verileri neden gerçekten silmiyoruz?**
-  Finansal veriler "silinse" bile veritabanından fiziksel olarak kaldırılmıyor — yalnızca `is_active = 0` veya `status = DELETED` yapılıyor.
-  - Neden? Muhasebe denetiminde "bu işlem neden yok?" sorusuna cevap verebilmek gerekir.
-  - KVKK "silme hakkı" ile soft delete nasıl bağdaşır? (Hint: PII alanları anonymize edilir, kayıt silinmez)
-  - **Anahtar soru:** Silinen bir kullanıcının ledger kayıtları ne olmalı? Kullanıcı adı silinebilir ama para hareketi kaydı silinebilir mi?

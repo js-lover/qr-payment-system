@@ -10,7 +10,7 @@
 
 | # | Klasör | Kapsam | Durum |
 |---|---|---|---|
-| 00 | `00-overview/` | Genel sistem mimarisi, aktörler, tech stack | ✅ [SYSTEM-OVERVIEW](../SYSTEM-OVERVİEW.md) |
+| 00 | [`00-overview/`](00-overview/README.md) | Genel sistem mimarisi, aktörler, tech stack | ✅ Tamamlandı |
 | 01 | [`01-auth-service/`](01-auth-service/README.md) | OAuth 2.0, JWT, mTLS, Terminal doğrulama | ✅ Tamamlandı |
 | 02 | [`02-onboarding-service/`](02-onboarding-service/README.md) | Müşteri kaydı, KYC, İşyeri tanımlama | ✅ Tamamlandı |
 | 03 | [`03-wallet-service/`](03-wallet-service/README.md) | Double-Entry Bookkeeping, Top-up, Bloke/Provision | ✅ Tamamlandı |
@@ -22,4 +22,5 @@
 | 09 | [`09-data-models/`](09-data-models/README.md) | ER diyagramları, tablo şemaları, Ledger akışı | ✅ Tamamlandı |
 | 10 | [`10-deployment/`](10-deployment/README.md) | Docker, Kubernetes, CI/CD, deployment fazları | ✅ Tamamlandı |
 | 11 | [`11-adr/`](11-adr/README.md) | 7 Architecture Decision Record (ADR-001 → ADR-007) | ✅ Tamamlandı |
+| — | [`Research.md`](Research.md) | Tüm servisler için araştırma rehberi (konsolide) | ✅ Tamamlandı |
 

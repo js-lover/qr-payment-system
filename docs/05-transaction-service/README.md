@@ -40,6 +40,7 @@ Transaction Service, ödeme sürecinin **bankacılık çekirdeğiyle** konuşan 
 ## 2. Architecture & Bounded Context (Mimari ve Sınırlar)
 
 ```mermaid
+graph TD
     subgraph Upstream
         A[QR Code Service]
     end
@@ -200,6 +201,7 @@ graph LR
         R7["Field 12: Local Time - hhmmss"]
         R8["Field 13: Local Date - MMDD"]
         R9["Field 18: MCC - 5411 Grocery"]
+        R9b["Field 22: POS Entry Mode - 033 QR Scan"]
         R10["Field 37: Retrieval Ref No - 12-char"]
         R11["Field 41: Terminal ID - TERM-001"]
         R12["Field 42: Merchant ID - MERCH-XOX-999"]
@@ -322,50 +324,4 @@ var combined = Policy.WrapAsync(retryPolicy, circuitBreakerPolicy, timeoutPolicy
 | **Audit Trail** | Her durum değişikliği `updated_at` ile kaydedilir; tam iz sürülebilirlik. |
 | **PCI-DSS Uyumu** | Kart verisi işlenmediği için kapsam dışı; yalnızca wallet_id kullanılır. |
 
----
-
-## 7. Research & Open Questions (Yeni Başlayanlar İçin Araştırma Rehberi)
-
-> Bu bölüm, bankacılık protokolleri ve dağıtık sistem resiliency konularına yeni başlayan backend geliştiriciler için hazırlanmıştır.
-> Her madde; **ne öğreneceğini**, **neden önemli olduğunu** ve **nereden başlayacağını** gösterir.
-
----
-
-- **📚 ISO 8583 nedir? Neden JSON veya REST kullanmıyoruz?**
-  Bankalarla konuşurken REST API veya JSON değil, 1987'den beri kullanılan ISO 8583 protokolü kullanılıyor. Neden?
-  - ISO 8583'ün "bitmap" tabanlı yapısını araştır: Her bit, bir field'ın varlığını gösterir. Bu neden JSON'dan daha verimlidir?
-  - `0200` (istek), `0210` (yanıt), `0420` (iptal) MTI (Message Type Indicator) kodlarını ezberle. Bunlar bankacılıkta "HTTP metotları" gibidir.
-  - **Anahtar soru:** ISO 8583 neden TCP üzerinden çalışır, HTTP üzerinden değil? (Hint: Düşük latency ve persistent connection)
-
----
-
-- **📚 Idempotency nedir? Neden "aynı isteği iki kez gönder" problemi var?**
-  Ağ sorunları nedeniyle aynı ödeme isteği bankaya iki kez ulaşabilir. Kullanıcının hesabından iki kez para kesilirse?
-  - "Idempotent operation" kavramını araştır: Aynı işlemi 1 kez veya 5 kez yapsan da sonuç aynı olursa idempotent'tir.
-  - Bu sistemde idempotency nasıl sağlandı? `qr_token UNIQUE` constraint'ine bak.
-  - **Anahtar soru:** STAN (System Trace Audit Number) neden her gün sıfırlanıyor? 1 milyondan fazla işlem yapılan bir günde ne olur?
-
----
-
-- **📚 Reversal (0420) nedir? Para neden "geri alınır"?**
-  Banka `91` kodu döndürdüğünde veya 30 saniye timeout olduğunda `0420 Reversal` mesajı gönderiliyor. Bu ne anlama gelir?
-  - Şu senaryoyu düşün: Banka isteği aldı ve işledi, ama cevabı ağda kayboldu. Müşterinin blokesi açık kaldı. Ne yapılmalı?
-  - Reversal bir "geri alma" talebidir: "O işlemi iptal et" denir — ama banka zaten işlememişse? Reversal zararsız mı?
-  - **Anahtar soru:** Reversal da başarısız olursa? (5 deneme sonrası `MANUAL_INTERVENTION`) Operatör ne yapmalı? Bu durum gerçek bankacılıkta "exception handling" olarak bilinir.
-
----
-
-- **📚 Circuit Breaker (Devre Kesici) nedir?**
-  Polly kütüphanesinde `CircuitBreakerAsync` görüldü. Bu bir yazılım tasarım desenidir — elektrik devre kesicisinden ilham alır.
-  - Normal durumda devre "kapalı" (closed) → istekler geçer. Sürekli hata olursa devre "açık" (open) → 60 saniye istekler reddedilir.
-  - Neden sürekli başarısız olan bir servisi çağırmaya devam etmek zararlıdır? (Hint: Thread pool tükenir, tüm sistem yavaşlar)
-  - **Anahtar soru:** Devre açıkken gelen isteklere ne dönmeliyiz? `503 Service Unavailable` mı, yoksa cached bir yanıt mı?
-
----
-
-- **📚 Exponential Backoff nedir? Neden 1, 2, 4 saniye bekliyoruz?**
-  Retry policy'de her denemede daha uzun bekleniyor: 2s, 4s, 8s... Bu "exponential backoff" stratejisidir.
-  - Neden sabit aralıkla (her saniye) retry yapmak yerine artan beklemeler kullanılır? (Hint: Thundering herd problemi)
-  - 1000 kullanıcı aynı anda hata alıp her biri 1 saniyede retry yaparsa sunucu ne olur? Backoff bunu nasıl dağıtır?
-  - **Dene:** Polly kütüphanesini .NET projesine ekle ve `WaitAndRetryAsync` ile basit bir HTTP retry policy yaz.
 

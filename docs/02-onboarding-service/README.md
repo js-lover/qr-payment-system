@@ -100,16 +100,22 @@ sequenceDiagram
     OB->>DB: UPDATE customer SET status=KYC_PENDING
 
     App->>OB: POST /onboarding/customer/kyc\n{selfie_photo, id_card_front, id_card_back}
-    OB->>KYC: Verify TCKN + Face Match
+    OB->>KYC: Verify TCKN + Face Match (NVI/MERNİS)
     KYC-->>OB: {is_valid: true, risk_score: 12}
 
-    alt KYC Onaylandı
+    OB->>OB: AML / MASAK Kara Liste Taraması\n(Yaptırım listeleri + Kara listeler)
+
+    alt KYC Onaylandı ve AML Temiz
         OB->>DB: UPDATE customer SET status=APPROVED
         OB->>Kafka: Publish CustomerApprovedEvent\n{user_id, phone, name, tckn_hash}
         OB-->>App: 200 OK — Hesabınız aktif!
     else KYC Reddedildi
         OB->>DB: UPDATE customer SET status=KYC_REJECTED, reject_reason=?
         OB-->>App: 422 — KYC doğrulaması başarısız
+    else AML Kara Listede
+        OB->>DB: UPDATE customer SET status=AML_BLOCKED
+        OB-->>App: 403 — Başvurunuz işleme alınamadı
+        Note over OB: MASAK zorunluluğu gereği bildirim yapılır
     end
 ```
 
@@ -134,6 +140,8 @@ sequenceDiagram
 
 ### 3.3 Üye İşyeri Kayıt Akışı
 
+Üye İşyeri hiyerarşisi: **Firma (Merchant)** → **Şubeler (Stores)** → **Terminaller (TID)** şeklinde kurgulanır.
+
 ```mermaid
 sequenceDiagram
     participant Portal as 🌐 Merchant Portal
@@ -142,21 +150,23 @@ sequenceDiagram
     participant Auth as Auth Service (Direct Call)
     participant Email as Email Service
 
-    Portal->>OB: POST /onboarding/merchant/apply\n{company_name, tax_no, iban, contact_email}
-    OB->>DB: INSERT merchant (status=UNDER_REVIEW)
+    Portal->>OB: POST /onboarding/merchant/apply\n{company_name, tax_no, iban, mcc, contact_email}
+    OB->>DB: INSERT merchants (status=UNDER_REVIEW)
     OB->>Email: Send "Başvurunuz alındı" email
 
-    Note over OB: Manuel veya Otomatik vergi no doğrulaması
+    Note over OB: Vergi No doğrulaması (otomatik/manuel)
+    Note over OB: AML / MASAK Kurumsal Kara Liste Taraması
 
-    OB->>DB: UPDATE merchant SET status=APPROVED
+    OB->>DB: UPDATE merchants SET status=APPROVED
+    OB->>DB: INSERT stores\n{store_id, merchant_id, store_name, address}
 
-    OB->>Auth: POST /internal/terminal/provision\n{merchant_id, terminal_count}
-    Auth->>Auth: Generate API Key + Secret Key pairs
+    OB->>Auth: POST /internal/terminal/provision\n{merchant_id, store_id, terminal_count}
     Auth->>Auth: Generate HMAC secret per terminal
-    Auth-->>OB: {api_keys: [...], terminal_ids: [...]}
+    Auth-->>OB: {terminal_ids: ["T001","T002"], hmac_secrets: [...]}
 
     OB->>Email: Send credentials to merchant
-    OB->>DB: UPDATE merchant SET provisioned=true
+    OB->>DB: UPDATE merchants SET provisioned=true
+    OB->>DB: INSERT terminal_registry (per TID)
 ```
 
 ### 3.4 Onboarding Durum Makinesi
@@ -170,7 +180,10 @@ stateDiagram-v2
     PHONE_PENDING --> PHONE_PENDING : OTP yeniden gönder (max 3)
     PHONE_PENDING --> BLOCKED : 3 başarısız deneme
 
-    KYC_PENDING --> APPROVED : KYC geçti
+    KYC_PENDING --> AML_CHECK : KYC geçti → AML taraması
+    AML_CHECK --> APPROVED : AML temiz
+    AML_CHECK --> AML_BLOCKED : Kara listede
+
     KYC_PENDING --> KYC_REJECTED : KYC reddedildi
     KYC_REJECTED --> KYC_PENDING : Tekrar başvuru (max 2)
     KYC_REJECTED --> PERMANENTLY_REJECTED : 2. red
@@ -178,6 +191,7 @@ stateDiagram-v2
     APPROVED --> SUSPENDED : Admin müdahalesi
     SUSPENDED --> APPROVED : Admin onayı
     PERMANENTLY_REJECTED --> [*]
+    AML_BLOCKED --> [*] : MASAK bildirimi
     BLOCKED --> [*]
 ```
 
@@ -201,24 +215,41 @@ CREATE TABLE customers (
     id              UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     full_name       NVARCHAR(200) NOT NULL,
     phone           NVARCHAR(20) NOT NULL UNIQUE,
-    tckn_hash       NVARCHAR(256) NOT NULL,       -- SHA-256(TCKN), ham TCKN saklanmaz
-    status          VARCHAR(30) NOT NULL,          -- REGISTERED | PHONE_PENDING | KYC_PENDING | APPROVED | ...
+    tckn_hash       NVARCHAR(256) NOT NULL,       -- SHA-256(TCKN + salt); ham TCKN saklanmaz
+    status          VARCHAR(30) NOT NULL,          -- REGISTERED | PHONE_PENDING | KYC_PENDING | APPROVED | KYC_REJECTED | AML_BLOCKED | SUSPENDED
     kyc_risk_score  SMALLINT,
+    aml_checked_at  DATETIME2,                    -- AML/MASAK tarama zamanı
     reject_reason   NVARCHAR(500),
     created_at      DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     updated_at      DATETIME2 NOT NULL DEFAULT GETUTCDATE()
 );
 
+-- Firma (Merchant) seviyesi — ana işyeri kaydı
 CREATE TABLE merchants (
     id              UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     company_name    NVARCHAR(200) NOT NULL,
-    tax_number      NVARCHAR(20) NOT NULL UNIQUE,
-    iban            NVARCHAR(34) NOT NULL,
+    tax_number      NVARCHAR(20) NOT NULL UNIQUE, -- VKN
+    mersis_no       NVARCHAR(20),                 -- MERSİS numarası
+    iban            NVARCHAR(34) NOT NULL,         -- Hak ediş hesabı
+    mcc             VARCHAR(4) NOT NULL,           -- Merchant Category Code
     contact_email   NVARCHAR(256) NOT NULL,
     status          VARCHAR(30) NOT NULL,          -- UNDER_REVIEW | APPROVED | SUSPENDED
     provisioned     BIT NOT NULL DEFAULT 0,
     created_at      DATETIME2 NOT NULL DEFAULT GETUTCDATE()
 );
+
+-- Şube (Store) seviyesi — merchant hiyerarşisinin ikinci katmanı
+CREATE TABLE stores (
+    id              UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    merchant_id     UNIQUEIDENTIFIER NOT NULL REFERENCES merchants(id),
+    store_name      NVARCHAR(200) NOT NULL,
+    address         NVARCHAR(500),
+    city            NVARCHAR(100),
+    status          VARCHAR(20) NOT NULL DEFAULT 'ACTIVE', -- ACTIVE | INACTIVE
+    created_at      DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+);
+-- Terminal (TID) seviyesi → auth_db.terminal_registry tablosunda yönetilir;
+-- store_id FK buradan terminal_registry'ye event üzerinden bağlanır.
 ```
 
 ---
@@ -262,50 +293,4 @@ sequenceDiagram
 | **PII Maskeleme** | Log'larda telefon numarası ve ad maskelenir: `+90 5XX XXX XX 12` → `+90 5** *** ** 12`. |
 | **Rate Limiting** | OTP gönderimi: aynı telefona max 3 OTP / 10 dakika. |
 
----
-
-## 7. Research & Open Questions (Yeni Başlayanlar İçin Araştırma Rehberi)
-
-> Bu bölüm, ödeme sistemleri ve kayıt akışlarına yeni başlayan backend geliştiriciler için hazırlanmıştır.
-> Her madde; **ne öğreneceğini**, **neden önemli olduğunu** ve **nereden başlayacağını** gösterir.
-
----
-
-- **📚 Event-Driven Architecture nedir ve neden Kafka kullandık?**
-  Onboarding servisi onayladıktan sonra Auth ve Wallet servislerine **doğrudan HTTP çağrısı yapmak** yerine Kafka'ya event publish ediyor. Neden?
-  - "Tight coupling" ile "Loose coupling" arasındaki farkı araştır. HTTP çağrısı sırasında Auth Service çökmüş olsaydı ne olurdu?
-  - Event-Driven Architecture'da publisher consumer'ı tanımak zorunda değildir — bu ne anlama gelir?
-  - **Anahtar soru:** Kafka ile HTTP arasındaki temel trade-off nedir? (Hint: Eventual consistency vs. immediate consistency)
-
----
-
-- **📚 Outbox Pattern: Kafka'ya mesaj kaybetmeden nasıl gönderilir?**
-  Servis veritabanına yazdıktan sonra Kafka'ya publish etmeye çalışırken çökerse ne olur? İşte Outbox Pattern tam bu problemi çözer.
-  - "Two-phase commit" problemini araştır: Neden bir DB transaction'ı ile Kafka publish'i atomik yapamayız?
-  - Outbox Pattern'ın çalışma mantığı: Kafka'ya yazmak yerine DB'ye yaz, bir Worker okuyup Kafka'ya ilet.
-  - **Dene:** [MassTransit Outbox](https://masstransit.io/documentation/patterns/transactional-outbox) veya [Wolverine](https://wolverine.netlify.app/) dokümantasyonunu oku.
-
----
-
-- **📚 KYC nedir? Gerçek hayatta nasıl çalışır?**
-  KYC (Know Your Customer), finansal sistemlerin kimlik doğrulama zorunluluğudur. Bir banka veya ödeme sistemi neden kimliğini bilmek zorundadır?
-  - "AML (Anti-Money Laundering)" ve "MASAK" kavramlarını araştır. Türkiye'de ödeme kuruluşları hangi regülasyona tabidir?
-  - Face matching nasıl çalışır? "Liveness detection" neden önemlidir? (Fotoğrafla geçmeyi engeller)
-  - **Anahtar soru:** Bu sistemde ham TCKN neden saklanmıyor, yalnızca hash'i tutuluyor? Birisi DB'ye erişse bile ne işe yarar?
-
----
-
-- **📚 State Machine (Durum Makinesi) nedir ve neden kullanıyoruz?**
-  Müşteri kaydının `REGISTERED → PHONE_PENDING → KYC_PENDING → APPROVED` gibi adımları var. Bu bir state machine.
-  - State machine neden `if/else` yığınından daha iyi bir yaklaşımdır?
-  - .NET'te state machine implement etmek için [Stateless](https://github.com/dotnet-state-machine/stateless) kütüphanesine bak.
-  - **Anahtar soru:** Bir müşteri `KYC_REJECTED` durumundayken tekrar `APPROVED`'a geçebilir mi? Kuralı nerede tanımlarız?
-
----
-
-- **📚 KVKK ve Kişisel Veri Güvenliği**
-  Sistemde müşteri adı, telefon numarası, TCKN ve kimlik fotoğrafı işleniyor. Bunlar kişisel veri — yasal yükümlülükler var.
-  - KVKK'nın "veri minimizasyonu" ilkesini araştır: Sadece ihtiyacın olan veriyi topla.
-  - "Right to Erasure" (Silme hakkı) ne demek? Müşteri hesabını silmek istediğinde log'lardaki veriler ne olacak?
-  - **Anahtar soru:** Log'larda `+90 5XX XXX XX 12` yerine `+90 5** *** ** 12` yazılması (maskeleme) neden yeterli değil, neden daha fazlası gerekir?
 
