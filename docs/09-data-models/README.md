@@ -133,14 +133,14 @@ erDiagram
     CREDENTIALS ||--o{ REFRESH_TOKENS : "user_id"
     WALLET_ACCOUNTS ||--o{ LEDGER_ENTRIES : "account_id"
     WALLET_ACCOUNTS ||--o{ PROVISIONS : "wallet_id"
-    CUSTOMERS ..o{ CREDENTIALS : "user_id (event)"
-    CUSTOMERS ..o{ WALLET_ACCOUNTS : "user_id (event)"
-    TRANSACTIONS ..o{ PROVISIONS : "provision_id (event)"
+    CUSTOMERS ||..o{ CREDENTIALS : "user_id (event)"
+    CUSTOMERS ||..o{ WALLET_ACCOUNTS : "user_id (event)"
+    TRANSACTIONS ||..o{ PROVISIONS : "provision_id (event)"
     MERCHANTS ||--o{ STORES : "merchant_id"
-    STORES ..o{ TERMINAL_REGISTRY : "store_id (event)"
+    STORES ||..o{ TERMINAL_REGISTRY : "store_id (event)"
 ```
 
-> **Noktalı çizgi (..o{):** Doğrudan FK ilişkisi değil, event ile bağlı servisler arası referans. JOIN yapılamaz.
+> **Kesik çizgi (||..o{):** Doğrudan FK ilişkisi değil, event ile bağlı servisler arası referans. JOIN yapılamaz.
 
 ---
 
