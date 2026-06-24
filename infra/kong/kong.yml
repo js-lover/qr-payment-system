@@ -1,0 +1,92 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: auth-service
+    url: http://auth-service:5001
+    routes:
+      - name: auth-routes
+        paths: ["/auth"]
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 20
+          policy: local
+      - name: correlation-id
+        config:
+          header_name: X-Request-Id
+          generator: uuid
+          echo_downstream: true
+
+  - name: onboarding-service
+    url: http://onboarding-service:5002
+    routes:
+      - name: onboarding-routes
+        paths: ["/onboarding"]
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 30
+          policy: local
+
+  - name: wallet-service
+    url: http://wallet-service:5003
+    routes:
+      - name: wallet-routes
+        paths: ["/wallet"]
+        strip_path: false
+    plugins:
+      - name: jwt
+        config:
+          key_claim_name: sub
+          claims_to_verify: [exp]
+      - name: rate-limiting
+        config:
+          minute: 60
+          policy: local
+
+  - name: qr-service
+    url: http://qr-service:5004
+    routes:
+      - name: qr-routes
+        paths: ["/v1/qr"]
+        strip_path: false
+    plugins:
+      - name: jwt
+      - name: rate-limiting
+        config:
+          minute: 60
+          policy: local
+
+  - name: transaction-service
+    url: http://transaction-service:5005
+    routes:
+      - name: payment-routes
+        paths: ["/v1/payments", "/hubs/payment"]
+        strip_path: false
+    plugins:
+      - name: jwt
+      - name: rate-limiting
+        config:
+          minute: 30
+          policy: local
+
+  - name: reporting-service
+    url: http://reporting-service:5006
+    routes:
+      - name: report-routes
+        paths: ["/report"]
+        strip_path: false
+    plugins:
+      - name: jwt
+      - name: rate-limiting
+        config:
+          minute: 100
+          policy: local
+
+plugins:
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 10
