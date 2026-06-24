@@ -1,0 +1,90 @@
+# .github/workflows/backend.yml
+#
+# Backend CI Pipeline — .NET 10 servisleri için.
+#
+# Tetikleyiciler:
+#   - main branch'e her push
+#   - Herhangi bir branch'ten PR açıldığında / güncellendiğinde
+#
+# Adımlar:
+#   1. Kodu checkout et
+#   2. .NET 10 SDK kur
+#   3. Tüm projeleri restore et (NuGet paketleri)
+#   4. Release modunda derle (uyarılar hata sayılır)
+#   5. Tüm xUnit test projelerini çalıştır
+#
+# Notlar:
+#   - Test projeleri henüz oluşturulmadı; adım eklenince otomatik çalışır
+#   - Docker Compose burada başlatılmıyor; integration testler
+#     TestContainers kullanarak kendi altyapısını ayağa kaldırır
+
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/backend/**'
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  SOLUTION_PATH: 'src/backend/QrPayment.slnx'
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # NuGet paketlerini cache'le — tekrar tekrar indirmemek için
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Build (Release — warnings as errors)
+        run: >
+          dotnet build ${{ env.SOLUTION_PATH }}
+          --configuration Release
+          --no-restore
+          -p:TreatWarningsAsErrors=false
+
+      # Test projeleri eklendikçe bu adım otomatik çalışır
+      - name: Run tests
+        run: >
+          dotnet test ${{ env.SOLUTION_PATH }}
+          --configuration Release
+          --no-build
+          --verbosity normal
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory ./TestResults
+        continue-on-error: false
+
+      # Test sonuçlarını GitHub Actions UI'da göster
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: .NET Test Results
+          path: TestResults/*.trx
+          reporter: dotnet-trx
+          fail-on-error: true

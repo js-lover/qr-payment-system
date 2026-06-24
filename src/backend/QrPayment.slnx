@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/shared/">
+    <Project Path="shared/QrPayment.Contracts/QrPayment.Contracts.csproj" />
+    <Project Path="shared/QrPayment.Kafka/QrPayment.Kafka.csproj" />
+    <Project Path="shared/QrPayment.Shared/QrPayment.Shared.csproj" />
+  </Folder>
+</Solution>
