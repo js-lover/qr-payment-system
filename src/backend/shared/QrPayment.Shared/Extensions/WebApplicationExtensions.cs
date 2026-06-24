@@ -59,11 +59,9 @@ public static class WebApplicationExtensions
 
     /// <summary>
     /// Health check altyapısını DI container'a kaydeder.
-    /// Her servis kendi DB/Redis check'lerini bu çağrı üzerine zincirleme ekler.
+    /// Dönen IHealthChecksBuilder'a her servis kendi DB/Redis check'lerini zincirleyebilir.
+    /// Örn: builder.Services.AddQrPaymentHealthChecks().AddSqlServer(...).AddRedis(...);
     /// </summary>
-    public static IServiceCollection AddQrPaymentHealthChecks(this IServiceCollection services)
-    {
-        services.AddHealthChecks();
-        return services;
-    }
+    public static IHealthChecksBuilder AddQrPaymentHealthChecks(this IServiceCollection services)
+        => services.AddHealthChecks();
 }
