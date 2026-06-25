@@ -10,6 +10,11 @@
     <Project Path="services/OnboardingService/OnboardingService.Domain/OnboardingService.Domain.csproj" />
     <Project Path="services/OnboardingService/OnboardingService.Infrastructure/OnboardingService.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/services/QrCodeService/">
+    <Project Path="services/QrCodeService/QrCodeService.Api/QrCodeService.Api.csproj" />
+    <Project Path="services/QrCodeService/QrCodeService.Domain/QrCodeService.Domain.csproj" />
+    <Project Path="services/QrCodeService/QrCodeService.Infrastructure/QrCodeService.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/services/WalletService/">
     <Project Path="services/WalletService/WalletService.Api/WalletService.Api.csproj" />
     <Project Path="services/WalletService/WalletService.Domain/WalletService.Domain.csproj" />
