@@ -1,5 +1,7 @@
 <Solution>
-  <Folder Name="/services/" />
+  <Folder Name="/services/">
+    <Project Path="services/BankSimulator/BankSimulator.csproj" />
+  </Folder>
   <Folder Name="/services/AuthService/">
     <Project Path="services/AuthService/AuthService.Api/AuthService.Api.csproj" />
     <Project Path="services/AuthService/AuthService.Domain/AuthService.Domain.csproj" />
@@ -14,6 +16,11 @@
     <Project Path="services/QrCodeService/QrCodeService.Api/QrCodeService.Api.csproj" />
     <Project Path="services/QrCodeService/QrCodeService.Domain/QrCodeService.Domain.csproj" />
     <Project Path="services/QrCodeService/QrCodeService.Infrastructure/QrCodeService.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/services/TransactionService/">
+    <Project Path="services/TransactionService/TransactionService.Api/TransactionService.Api.csproj" />
+    <Project Path="services/TransactionService/TransactionService.Domain/TransactionService.Domain.csproj" />
+    <Project Path="services/TransactionService/TransactionService.Infrastructure/TransactionService.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/services/WalletService/">
     <Project Path="services/WalletService/WalletService.Api/WalletService.Api.csproj" />
