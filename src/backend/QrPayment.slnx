@@ -17,6 +17,11 @@
     <Project Path="services/QrCodeService/QrCodeService.Domain/QrCodeService.Domain.csproj" />
     <Project Path="services/QrCodeService/QrCodeService.Infrastructure/QrCodeService.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/services/ReportingService/">
+    <Project Path="services/ReportingService/ReportingService.Api/ReportingService.Api.csproj" />
+    <Project Path="services/ReportingService/ReportingService.Domain/ReportingService.Domain.csproj" />
+    <Project Path="services/ReportingService/ReportingService.Infrastructure/ReportingService.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/services/TransactionService/">
     <Project Path="services/TransactionService/TransactionService.Api/TransactionService.Api.csproj" />
     <Project Path="services/TransactionService/TransactionService.Domain/TransactionService.Domain.csproj" />
