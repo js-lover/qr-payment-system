@@ -1,4 +1,15 @@
 <Solution>
+  <Folder Name="/services/" />
+  <Folder Name="/services/AuthService/">
+    <Project Path="services/AuthService/AuthService.Api/AuthService.Api.csproj" />
+    <Project Path="services/AuthService/AuthService.Domain/AuthService.Domain.csproj" />
+    <Project Path="services/AuthService/AuthService.Infrastructure/AuthService.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/services/OnboardingService/">
+    <Project Path="services/OnboardingService/OnboardingService.Api/OnboardingService.Api.csproj" />
+    <Project Path="services/OnboardingService/OnboardingService.Domain/OnboardingService.Domain.csproj" />
+    <Project Path="services/OnboardingService/OnboardingService.Infrastructure/OnboardingService.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/shared/">
     <Project Path="shared/QrPayment.Contracts/QrPayment.Contracts.csproj" />
     <Project Path="shared/QrPayment.Kafka/QrPayment.Kafka.csproj" />
