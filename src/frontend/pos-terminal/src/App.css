@@ -1,0 +1,156 @@
+/* src/frontend/pos-terminal / src/App.css
+ *
+ * POS Terminal UI stilleri.
+ * Dokunmatik ekran için büyük font, büyük butonlar, temiz düzen.
+ */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  background: #F3F4F6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.pos-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 48px;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08);
+  min-width: 400px;
+  max-width: 500px;
+  width: 100%;
+}
+
+.pos-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  text-align: center;
+}
+
+.pos-amount {
+  font-size: 48px;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.amount-input {
+  width: 100%;
+  padding: 16px;
+  font-size: 32px;
+  font-weight: 600;
+  text-align: center;
+  border: 2px solid #D1D5DB;
+  border-radius: 10px;
+  outline: none;
+  color: #111827;
+}
+
+.amount-input:focus {
+  border-color: #4F46E5;
+}
+
+.btn {
+  width: 100%;
+  padding: 18px;
+  font-size: 18px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #4F46E5;
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #4338CA;
+}
+
+.btn-secondary {
+  background: #E5E7EB;
+  color: #374151;
+}
+
+.qr-wrapper {
+  padding: 20px;
+  background: #fff;
+  border: 2px solid #E5E7EB;
+  border-radius: 12px;
+}
+
+.countdown {
+  font-size: 16px;
+  color: #9CA3AF;
+  font-weight: 500;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 56px;
+  height: 56px;
+  border: 5px solid #E5E7EB;
+  border-top-color: #4F46E5;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.wait-text {
+  font-size: 22px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.result-screen {
+  border-top: 8px solid transparent;
+}
+
+.result-screen.approved {
+  border-top-color: #10B981;
+  background: linear-gradient(to bottom, #ECFDF5, #fff);
+}
+
+.result-screen.declined {
+  border-top-color: #EF4444;
+  background: linear-gradient(to bottom, #FEF2F2, #fff);
+}
+
+.result-icon {
+  font-size: 80px;
+}
+
+.result-title {
+  font-size: 36px;
+  font-weight: 800;
+}
+
+.result-screen.approved .result-title {
+  color: #065F46;
+}
+
+.result-screen.declined .result-title {
+  color: #991B1B;
+}
