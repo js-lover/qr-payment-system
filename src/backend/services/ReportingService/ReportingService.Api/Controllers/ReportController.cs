@@ -51,10 +51,8 @@ public class ReportController(IElasticsearchService esService) : ControllerBase
         [FromQuery] int size = 20,
         CancellationToken ct = default)
     {
-        // Merchant rolü sadece kendi merchant'ının verilerine erişebilir
-        if (User.IsInRole("MERCHANT") && !merchantId.HasValue)
-            merchantId = CurrentUserId; // Merchant kullanıcısının ID'si merchant ID ile eşleşir
-
+        // merchantId filtresi query param ile dışarıdan verilebilir.
+        // JWT sub ≠ merchant entity ID olduğundan otomatik atama yapılmıyor.
         var transactions = await esService.SearchAsync(customerId, merchantId, from, to, page, size, ct);
         return Ok(ApiResponse<IReadOnlyList<TransactionDocument>>.Ok(transactions, HttpContext.TraceIdentifier));
     }

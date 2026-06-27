@@ -12,8 +12,6 @@ import {
   View, Text, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SignalR from '@microsoft/signalr';
 import { apiClient } from '../api/client';
 
 interface QrInfo {
@@ -35,9 +33,8 @@ export function PaymentConfirmScreen({ qrToken, onComplete }: Props) {
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
   const [countdown, setCountdown] = useState(90);
-  // ref: setTimeout closure'ında React state okunmaz — ref güvenilir
   const payingRef = useRef(false);
-  const connectionRef = useRef<SignalR.HubConnection | null>(null);
+  const connectionRef = useRef<null>(null);
 
   useEffect(() => {
     fetchQrInfo();
@@ -79,51 +76,27 @@ export function PaymentConfirmScreen({ qrToken, onComplete }: Props) {
     payingRef.current = true;
     setPaying(true);
     try {
+      // POST /payments/confirm tüm akışı senkron işler (provision → bank → kafka → signalR POS).
+      // HTTP yanıtında zaten nihai status var — ayrıca SignalR beklemeye gerek yok.
       const response = await apiClient.post('/payments/confirm', { qrToken });
       const { data } = response.data;
-      const { signalRGroup } = data;
 
-      const accessToken = await AsyncStorage.getItem('accessToken');
-
-      const connection = new SignalR.HubConnectionBuilder()
-        .withUrl(`${API_BASE_URL}/hubs/payment`, {
-          accessTokenFactory: () => accessToken ?? '',
-        })
-        .withAutomaticReconnect()
-        .build();
-
-      connectionRef.current = connection;
-
-      connection.on('PaymentResult', (result: { status: string }) => {
-        payingRef.current = false;
-        setPaying(false);
-        connection.stop();
-        if (result.status === 'COMPLETED') {
-          Alert.alert('Ödeme Başarılı', 'İşleminiz tamamlandı.');
-          onComplete(true);
-        } else {
-          Alert.alert('Ödeme Başarısız', 'İşlem gerçekleştirilemedi.');
-          onComplete(false);
-        }
-      });
-
-      await connection.start();
-      await connection.invoke('JoinPaymentGroup', signalRGroup);
-
-      // 30 saniye timeout: ref üzerinden kontrol — closure sorunu yok
-      setTimeout(() => {
-        if (payingRef.current) {
-          payingRef.current = false;
-          connection.stop();
-          setPaying(false);
-          Alert.alert('Zaman Aşımı', 'Ödeme yanıtı alınamadı.');
-          onComplete(false);
-        }
-      }, 30000);
-    } catch {
       payingRef.current = false;
       setPaying(false);
-      Alert.alert('Hata', 'Ödeme başlatılamadı.');
+
+      if (data.status === 'COMPLETED') {
+        Alert.alert('Ödeme Başarılı', 'İşleminiz tamamlandı.');
+        onComplete(true);
+      } else {
+        Alert.alert('Ödeme Başarısız', 'İşlem gerçekleştirilemedi.');
+        onComplete(false);
+      }
+    } catch (error: any) {
+      payingRef.current = false;
+      setPaying(false);
+      const msg = error.response?.data?.error?.message ?? 'Ödeme başlatılamadı.';
+      Alert.alert('Hata', msg);
+      onComplete(false);
     }
   };
 

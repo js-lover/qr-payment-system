@@ -103,7 +103,7 @@ public class PaymentService(
         {
             transaction.Fail("51"); // Yetersiz bakiye
             await transactionRepo.SaveChangesAsync(ct);
-            await NotifyTerminalAsync(transaction, ct);
+            await NotifyTerminalAsync(transaction, qrToken, ct);
             return transaction;
         }
 
@@ -163,8 +163,8 @@ public class PaymentService(
 
         await transactionRepo.SaveChangesAsync(ct);
 
-        // 7. SignalR anlık bildirim
-        await NotifyTerminalAsync(transaction, ct);
+        // 7. SignalR anlık bildirim — POS terminali qr:{qrToken} grubunda bekliyor
+        await NotifyTerminalAsync(transaction, qrToken, ct);
 
         return transaction;
     }
@@ -173,10 +173,11 @@ public class PaymentService(
         => await transactionRepo.GetByIdAsync(transactionId, ct)
            ?? throw new NotFoundException("Transaction", transactionId);
 
-    private async Task NotifyTerminalAsync(Transaction transaction, CancellationToken ct)
+    private async Task NotifyTerminalAsync(Transaction transaction, string qrToken, CancellationToken ct)
     {
+        // POS terminal, QR üretildiğinde "qr:{qrToken}" grubuna katılmıştır.
         await paymentHub.Clients
-            .Group($"payment:{transaction.Id}")
+            .Group($"qr:{qrToken}")
             .SendAsync("PaymentResult", new
             {
                 transactionId = transaction.Id,

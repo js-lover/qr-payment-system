@@ -125,7 +125,8 @@ export default function App() {
       setStage('qr');
 
       // SignalR bağlantısı QR oluşturulunca kurulur (müşteri tararken hazır olsun)
-      setupSignalR(token);
+      // Grup adı qr:{token} — backend aynı grubu kullanır
+      setupSignalR(token, d.token);
     } catch (err: any) {
       if (err?.response?.status === 401) {
         handleLogout();
@@ -137,7 +138,7 @@ export default function App() {
     }
   };
 
-  const setupSignalR = (authToken: string) => {
+  const setupSignalR = (authToken: string, qrToken: string) => {
     const conn = new signalR.HubConnectionBuilder()
       .withUrl(`${API_BASE}/hubs/payment`, {
         accessTokenFactory: () => authToken,
@@ -152,9 +153,11 @@ export default function App() {
       conn.stop();
     });
 
-    conn.start().catch(() => {
-      console.error('SignalR bağlantı hatası');
-    });
+    // Bağlantı kurulunca QR token bazlı gruba katıl
+    // Backend de aynı grubu kullanarak bildirim gönderir
+    conn.start()
+      .then(() => conn.invoke('JoinPaymentGroup', `qr:${qrToken}`))
+      .catch(() => console.error('SignalR bağlantı hatası'));
 
     connectionRef.current = conn;
   };
