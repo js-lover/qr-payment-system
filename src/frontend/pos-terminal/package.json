@@ -13,6 +13,7 @@
     "@microsoft/signalr": "^10.0.0",
     "axios": "^1.18.1",
     "qrcode": "^1.5.4",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-qrcode-logo": "^4.1.0"

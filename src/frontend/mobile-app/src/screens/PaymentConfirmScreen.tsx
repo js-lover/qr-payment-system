@@ -12,6 +12,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SignalR from '@microsoft/signalr';
 import { apiClient } from '../api/client';
 
@@ -82,7 +83,6 @@ export function PaymentConfirmScreen({ qrToken, onComplete }: Props) {
       const { data } = response.data;
       const { signalRGroup } = data;
 
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
       const accessToken = await AsyncStorage.getItem('accessToken');
 
       const connection = new SignalR.HubConnectionBuilder()
