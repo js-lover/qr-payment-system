@@ -7,7 +7,7 @@
 //   2. SignalR WebSocket bağlantısı kurulur (ödeme sonucu beklenir)
 //   3. "PaymentResult" eventi geldiğinde sonuç gösterilir
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert
@@ -34,15 +34,22 @@ export function PaymentConfirmScreen({ qrToken, onComplete }: Props) {
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
   const [countdown, setCountdown] = useState(90);
+  // ref: setTimeout closure'ında React state okunmaz — ref güvenilir
+  const payingRef = useRef(false);
+  const connectionRef = useRef<SignalR.HubConnection | null>(null);
 
   useEffect(() => {
     fetchQrInfo();
+    return () => {
+      connectionRef.current?.stop();
+    };
   }, [qrToken]);
 
   useEffect(() => {
     if (countdown <= 0) {
       Alert.alert('Süre Doldu', 'QR kodun süresi doldu.');
       onComplete(false);
+      return;
     }
     const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(timer);
@@ -55,7 +62,7 @@ export function PaymentConfirmScreen({ qrToken, onComplete }: Props) {
       setQrInfo({
         merchantTitle: data.merchantTitle,
         amount: data.amount,
-        currency: data.currency,
+        currency: data.currency ?? 'TRY',
         remainingSeconds: data.remainingSeconds,
       });
       setCountdown(data.remainingSeconds);
@@ -68,23 +75,29 @@ export function PaymentConfirmScreen({ qrToken, onComplete }: Props) {
   };
 
   const handlePay = async () => {
+    payingRef.current = true;
     setPaying(true);
     try {
       const response = await apiClient.post('/payments/confirm', { qrToken });
       const { data } = response.data;
-      const { transactionId, signalRGroup } = data;
+      const { signalRGroup } = data;
 
-      // SignalR bağlantısı kur
-      const accessToken = await (await import('@react-native-async-storage/async-storage')).default.getItem('accessToken');
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      const accessToken = await AsyncStorage.getItem('accessToken');
 
       const connection = new SignalR.HubConnectionBuilder()
-        .withUrl(`${API_BASE_URL}/hubs/payment?access_token=${accessToken}`)
+        .withUrl(`${API_BASE_URL}/hubs/payment`, {
+          accessTokenFactory: () => accessToken ?? '',
+        })
         .withAutomaticReconnect()
         .build();
 
+      connectionRef.current = connection;
+
       connection.on('PaymentResult', (result: { status: string }) => {
-        connection.stop();
+        payingRef.current = false;
         setPaying(false);
+        connection.stop();
         if (result.status === 'COMPLETED') {
           Alert.alert('Ödeme Başarılı', 'İşleminiz tamamlandı.');
           onComplete(true);
@@ -97,9 +110,10 @@ export function PaymentConfirmScreen({ qrToken, onComplete }: Props) {
       await connection.start();
       await connection.invoke('JoinPaymentGroup', signalRGroup);
 
-      // 30 saniye içinde yanıt gelmezse timeout
+      // 30 saniye timeout: ref üzerinden kontrol — closure sorunu yok
       setTimeout(() => {
-        if (paying) {
+        if (payingRef.current) {
+          payingRef.current = false;
           connection.stop();
           setPaying(false);
           Alert.alert('Zaman Aşımı', 'Ödeme yanıtı alınamadı.');
@@ -107,6 +121,7 @@ export function PaymentConfirmScreen({ qrToken, onComplete }: Props) {
         }
       }, 30000);
     } catch {
+      payingRef.current = false;
       setPaying(false);
       Alert.alert('Hata', 'Ödeme başlatılamadı.');
     }

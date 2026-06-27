@@ -154,3 +154,15 @@ body {
 .result-screen.declined .result-title {
   color: #991B1B;
 }
+
+.pos-subtitle {
+  font-size: 15px;
+  color: #6B7280;
+  margin-top: -12px;
+}
+
+.error-text {
+  color: #DC2626;
+  font-size: 14px;
+  text-align: center;
+}

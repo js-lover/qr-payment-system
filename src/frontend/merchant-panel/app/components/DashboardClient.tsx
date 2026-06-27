@@ -1,12 +1,9 @@
 // app/components/DashboardClient.tsx
 //
 // Merchant Panel dashboard (Client Component).
-// JWT token ile ReportingService'e istek atar.
-// Gösterilen veriler:
-//   - Günlük işlem özeti (toplam tutar, adet, başarı/başarısız)
-//   - Son 10 işlem listesi (tablo)
-//
-// Sayfa yenilendiğinde veri yeniden çekilir.
+// JWT token ile ReportingService'e doğrudan istek atar.
+// Özet (summary) kartları transaction listesinden hesaplanır —
+// backend'de ayrı bir /reports/summary endpoint'i yoktur.
 
 'use client';
 
@@ -35,6 +32,16 @@ const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-blue-100 text-blue-800',
 };
 
+function computeSummary(txList: Transaction[]): TransactionSummary {
+  return {
+    totalCount: txList.length,
+    totalAmount: txList.reduce((s, t) => s + (t.amount ?? 0), 0),
+    successCount: txList.filter((t) => t.status === 'COMPLETED').length,
+    failedCount: txList.filter((t) => t.status === 'FAILED' || t.status === 'REVERSED').length,
+    currency: txList[0]?.currency ?? 'TRY',
+  };
+}
+
 export default function DashboardClient({ token }: Props) {
   const router = useRouter();
   const [summary, setSummary] = useState<TransactionSummary | null>(null);
@@ -48,18 +55,21 @@ export default function DashboardClient({ token }: Props) {
   }, []);
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const [summaryResp, txResp] = await Promise.all([
-        axios.get(`${API_BASE}/reports/summary?from=${today}&to=${today}`, { headers }),
-        axios.get(`${API_BASE}/reports/transactions?page=1&pageSize=10`, { headers }),
-      ]);
-      setSummary(summaryResp.data.data);
-      setTransactions(txResp.data.data.items ?? []);
-    } catch {
-      // 401 → oturum süresi dolmuş
-      document.cookie = 'merchantToken=; path=/; max-age=0';
-      router.push('/login');
+      // Backend returns a flat array under data — no pagination wrapper
+      const txResp = await axios.get(
+        `${API_BASE}/reports/transactions?page=1&pageSize=20`,
+        { headers }
+      );
+      const items: Transaction[] = txResp.data?.data ?? [];
+      setTransactions(items);
+      setSummary(computeSummary(items));
+    } catch (err: any) {
+      if (err?.response?.status === 401) {
+        document.cookie = 'merchantToken=; path=/; max-age=0';
+        router.push('/login');
+      }
     } finally {
       setLoading(false);
     }
@@ -126,8 +136,14 @@ export default function DashboardClient({ token }: Props) {
 
             {/* Son İşlemler */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <h2 className="text-base font-semibold text-gray-900">Son İşlemler</h2>
+                <button
+                  onClick={fetchData}
+                  className="text-sm text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  Yenile
+                </button>
               </div>
 
               {transactions.length === 0 ? (
