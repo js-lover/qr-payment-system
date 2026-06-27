@@ -22,7 +22,12 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-barcode-scanner"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "QR ödeme yapmak için kamera erişimi gereklidir."
+        }
+      ]
     ]
   }
 }
