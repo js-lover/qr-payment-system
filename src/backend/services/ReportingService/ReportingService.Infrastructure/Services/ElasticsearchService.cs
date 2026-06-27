@@ -49,7 +49,7 @@ public class ElasticsearchService(
             .Size(size)
             .Query(q => q
                 .Term(t => t
-                    .Field(new Field("customerId"))
+                    .Field(new Field("customerId.keyword"))
                     .Value(customerId.ToString())))
             .Sort(so => so.Field(new Field("occurredAt"), new FieldSort { Order = SortOrder.Desc })),
             ct);
@@ -72,10 +72,10 @@ public class ElasticsearchService(
         var filters = new List<Query>();
 
         if (customerId.HasValue)
-            filters.Add(new TermQuery(new Field("customerId")) { Value = customerId.Value.ToString() });
+            filters.Add(new TermQuery(new Field("customerId.keyword")) { Value = customerId.Value.ToString() });
 
         if (merchantId.HasValue)
-            filters.Add(new TermQuery(new Field("merchantId")) { Value = merchantId.Value.ToString() });
+            filters.Add(new TermQuery(new Field("merchantId.keyword")) { Value = merchantId.Value.ToString() });
 
         if (from.HasValue || to.HasValue)
         {

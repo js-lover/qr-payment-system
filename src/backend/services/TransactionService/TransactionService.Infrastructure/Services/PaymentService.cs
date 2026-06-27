@@ -15,16 +15,21 @@
 // Not: Bu MVP'de QrCodeService ve WalletService'e HttpClient üzerinden çağrı yapılır.
 // Gerçek üretimde servis discovery (Consul/k8s) veya dahili gRPC tercih edilebilir.
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using TransactionService.Domain.Entities;
 using TransactionService.Domain.Interfaces;
 using TransactionService.Infrastructure.Hubs;
+using QrPayment.Contracts.QrCode;
 using QrPayment.Kafka.Events;
 using QrPayment.Kafka.Producer;
 using QrPayment.Shared.Exceptions;
+using QrPayment.Shared.Models;
 
 namespace TransactionService.Infrastructure.Services;
 
@@ -40,14 +45,25 @@ public class PaymentService(
     IKafkaProducer kafkaProducer,
     IHubContext<PaymentHub> paymentHub,
     IHttpClientFactory httpClientFactory,
+    IHttpContextAccessor httpContextAccessor,
     IConfiguration configuration,
     ILogger<PaymentService> logger) : IPaymentService
 {
+    private HttpClient CreateAuthorizedClient(string name)
+    {
+        var client = httpClientFactory.CreateClient(name);
+        var authHeader = httpContextAccessor.HttpContext?.Request.Headers.Authorization.FirstOrDefault();
+        if (authHeader is not null)
+            client.DefaultRequestHeaders.Authorization =
+                AuthenticationHeaderValue.Parse(authHeader);
+        return client;
+    }
+
     public async Task<Transaction> InitiatePaymentAsync(
         string qrToken, Guid customerId, CancellationToken ct = default)
     {
         // 1. QR token bilgilerini al (QrCodeService)
-        var qrClient = httpClientFactory.CreateClient("QrCodeService");
+        var qrClient = CreateAuthorizedClient("QrCodeService");
         var qrResponse = await qrClient.GetAsync($"/qr/{qrToken}/validate", ct);
 
         if (!qrResponse.IsSuccessStatusCode)
@@ -55,18 +71,23 @@ public class PaymentService(
                 "QR kodu geçersiz veya süresi dolmuş.", 400);
 
         // 2. QR token'ı claim et (sadece bir müşteri claim edebilir)
-        var claimClient = httpClientFactory.CreateClient("QrCodeService");
+        var claimClient = CreateAuthorizedClient("QrCodeService");
         var claimResponse = await claimClient.PostAsync($"/qr/{qrToken}/claim", null, ct);
         if (!claimResponse.IsSuccessStatusCode)
             throw new BusinessRuleException("QR_ALREADY_CLAIMED", "QR Zaten Kullanıldı",
                 "Bu QR kodu zaten başka bir ödeme için kullanıldı.", 409);
 
         // 3. Transaction kaydı oluştur
-        // QR bilgilerini parse et
-        dynamic? qrData = await qrResponse.Content.ReadFromJsonAsync<dynamic>(ct);
-        var merchantId = Guid.Parse((string)qrData!.data.merchantId);
-        var terminalId = Guid.Parse((string)qrData.data.terminalId);
-        var amountDecimal = (decimal)(double)qrData.data.amount;
+        var jsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var qrApiResp = await qrResponse.Content
+            .ReadFromJsonAsync<ApiResponse<ValidateQrResponse>>(jsonOpts, ct)
+            ?? throw new BusinessRuleException("QR_PARSE_ERROR", "QR Parse Hatası",
+                "QR yanıtı okunamadı.", 500);
+        var qrData = qrApiResp.Data
+            ?? throw new BusinessRuleException("QR_INVALID", "Geçersiz QR", "QR verisi boş.", 400);
+        var merchantId = qrData.MerchantId;
+        var terminalId = qrData.TerminalId;
+        var amountDecimal = qrData.Amount;
         var amountKurus = (long)(amountDecimal * 100);
 
         var transaction = Transaction.Create(qrToken, customerId, merchantId, terminalId, amountKurus);
@@ -74,7 +95,7 @@ public class PaymentService(
         await transactionRepo.SaveChangesAsync(ct);
 
         // 4. Wallet provision (bakiye bloke)
-        var walletClient = httpClientFactory.CreateClient("WalletService");
+        var walletClient = CreateAuthorizedClient("WalletService");
         var provisionResp = await walletClient.PostAsJsonAsync("/wallet/provision",
             new { amount = amountDecimal, qrToken }, ct);
 
@@ -110,7 +131,10 @@ public class PaymentService(
                 new PaymentCompletedEvent
                 {
                     TransactionId = transaction.Id,
+                    CustomerId = customerId,
                     MerchantId = merchantId,
+                    MerchantTitle = qrData.MerchantTitle,
+                    TerminalId = terminalId.ToString(),
                     Amount = amountDecimal,
                     Stan = stan,
                     Rrn = rrn,

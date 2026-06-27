@@ -29,7 +29,7 @@ public class WalletRepository(WalletDbContext db) : IWalletRepository
     /// </summary>
     public Task<Wallet?> GetByOwnerIdWithLockAsync(Guid ownerId, CancellationToken ct = default)
         => db.Wallets
-             .FromSqlRaw("SELECT * FROM wallets WITH (UPDLOCK, ROWLOCK) WHERE owner_id = {0}", ownerId)
+             .FromSqlRaw("SELECT * FROM wallets WITH (UPDLOCK, ROWLOCK) WHERE OwnerId = {0}", ownerId)
              .FirstOrDefaultAsync(ct);
 
     public async Task AddAsync(Wallet wallet, CancellationToken ct = default)

@@ -43,6 +43,7 @@ if (!string.IsNullOrEmpty(publicKeyPath) && File.Exists(publicKeyPath))
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
         {
+            options.MapInboundClaims = false;
             // SignalR WebSocket bağlantılarında token query string'den alınır
             options.Events = new JwtBearerEvents
             {
@@ -64,7 +65,9 @@ if (!string.IsNullOrEmpty(publicKeyPath) && File.Exists(publicKeyPath))
                 ValidIssuer = builder.Configuration["Jwt:Issuer"],
                 ValidAudience = builder.Configuration["Jwt:Audience"],
                 IssuerSigningKey = new RsaSecurityKey(rsa),
-                ClockSkew = TimeSpan.FromSeconds(30)
+                ClockSkew = TimeSpan.FromSeconds(30),
+                NameClaimType = "sub",
+                RoleClaimType = "role"
             };
         });
 

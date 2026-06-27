@@ -108,6 +108,7 @@ public record PaymentCompletedEvent : BaseEvent
 {
     public override string EventType => "payment.completed";
     public Guid TransactionId { get; init; }
+    public Guid CustomerId { get; init; }
     public Guid WalletId { get; init; }
     public Guid MerchantId { get; init; }
     public string MerchantTitle { get; init; } = string.Empty;

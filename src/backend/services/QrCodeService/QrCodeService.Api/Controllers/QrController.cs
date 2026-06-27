@@ -66,6 +66,7 @@ public class QrController(IQrTokenService qrTokenService) : ControllerBase
 
         var response = new ValidateQrResponse(
             qrToken.Token,
+            qrToken.TerminalId,
             qrToken.MerchantId,
             qrToken.MerchantTitle,
             qrToken.Amount,
@@ -74,6 +75,22 @@ public class QrController(IQrTokenService qrTokenService) : ControllerBase
             qrToken.RemainingSeconds);
 
         return Ok(ApiResponse<ValidateQrResponse>.Ok(response, HttpContext.TraceIdentifier));
+    }
+
+    /// <summary>
+    /// QR token'ı atomik olarak claim eder. TransactionService tarafından çağrılır.
+    /// Aynı QR iki kez claim edilemez — race condition koruması Redis SETNX ile sağlanır.
+    /// </summary>
+    [HttpPost("{token}/claim")]
+    [Authorize(Roles = "CUSTOMER")]
+    public async Task<ActionResult<ApiResponse<bool>>> Claim(string token, CancellationToken ct)
+    {
+        var claimed = await qrTokenService.ClaimAsync(token, ct);
+        if (!claimed)
+            throw new BusinessRuleException("QR_ALREADY_CLAIMED", "QR Zaten Kullanıldı",
+                "Bu QR kodu zaten başka bir ödeme için kullanıldı.", 409);
+
+        return Ok(ApiResponse<bool>.Ok(true, HttpContext.TraceIdentifier));
     }
 
     /// <summary>

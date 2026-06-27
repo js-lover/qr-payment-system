@@ -38,6 +38,7 @@ public record GenerateQrResponse(
 /// </summary>
 public record ValidateQrResponse(
     string Token,
+    Guid TerminalId,
     Guid MerchantId,
     string MerchantTitle,
     decimal Amount,

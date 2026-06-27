@@ -4,6 +4,7 @@
     <ProjectReference Include="..\TransactionService.Domain\TransactionService.Domain.csproj" />
     <ProjectReference Include="..\..\..\shared\QrPayment.Shared\QrPayment.Shared.csproj" />
     <ProjectReference Include="..\..\..\shared\QrPayment.Kafka\QrPayment.Kafka.csproj" />
+    <ProjectReference Include="..\..\..\shared\QrPayment.Contracts\QrPayment.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

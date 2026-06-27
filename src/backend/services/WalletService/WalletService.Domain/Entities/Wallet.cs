@@ -67,7 +67,6 @@ public class Wallet
     /// </summary>
     public void Credit(long amount)
     {
-        if (!IsActive) throw new InvalidOperationException("Wallet is not active.");
         if (amount <= 0) throw new ArgumentException("Credit amount must be positive.");
         AvailableBalance += amount;
     }

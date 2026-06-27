@@ -43,6 +43,7 @@ public static class InfrastructureExtensions
 
         // ─── Ödeme Servisi ────────────────────────────────────────────────────
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddHttpContextAccessor();
 
         // ─── Kafka Producer ───────────────────────────────────────────────────
         services.AddSingleton<IKafkaProducer>(sp =>

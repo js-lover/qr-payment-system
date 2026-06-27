@@ -40,8 +40,10 @@ public class PaymentCompletedConsumer(
         {
             Id = @event.TransactionId.ToString(),
             TransactionId = @event.TransactionId,
+            CustomerId = @event.CustomerId,
             MerchantId = @event.MerchantId,
             MerchantTitle = @event.MerchantTitle,
+            TerminalId = @event.TerminalId,
             Amount = @event.Amount,
             Currency = @event.Currency,
             Status = "COMPLETED",

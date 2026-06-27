@@ -62,61 +62,76 @@ public class WalletApplicationService(
     public async Task TopupAsync(
         Guid ownerId, long amountKurus, string referenceId, CancellationToken ct = default)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var wallet = await walletRepo.GetByOwnerIdWithLockAsync(ownerId, ct)
-            ?? throw new NotFoundException("Wallet", ownerId);
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var wallet = await walletRepo.GetByOwnerIdWithLockAsync(ownerId, ct)
+                ?? throw new NotFoundException("Wallet", ownerId);
 
-        wallet.Credit(amountKurus);
+            wallet.Credit(amountKurus);
 
-        var ledger = WalletLedger.Create(wallet.Id, "TOPUP", amountKurus, wallet.AvailableBalance, referenceId);
-        await walletRepo.AddLedgerEntryAsync(ledger, ct);
-        await walletRepo.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+            var ledger = WalletLedger.Create(wallet.Id, "TOPUP", amountKurus, wallet.AvailableBalance, referenceId);
+            await walletRepo.AddLedgerEntryAsync(ledger, ct);
+            await walletRepo.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
     }
 
     public async Task ProvisionAsync(
         Guid ownerId, long amountKurus, string qrToken, CancellationToken ct = default)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var wallet = await walletRepo.GetByOwnerIdWithLockAsync(ownerId, ct)
-            ?? throw new NotFoundException("Wallet", ownerId);
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var wallet = await walletRepo.GetByOwnerIdWithLockAsync(ownerId, ct)
+                ?? throw new NotFoundException("Wallet", ownerId);
 
-        // Provision işlemi domain entity'de yeterli bakiye kontrolü yapar
-        wallet.Provision(amountKurus);
+            wallet.Provision(amountKurus);
 
-        var ledger = WalletLedger.Create(wallet.Id, "PROVISION", -amountKurus, wallet.AvailableBalance, qrToken);
-        await walletRepo.AddLedgerEntryAsync(ledger, ct);
-        await walletRepo.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+            var ledger = WalletLedger.Create(wallet.Id, "PROVISION", -amountKurus, wallet.AvailableBalance, qrToken);
+            await walletRepo.AddLedgerEntryAsync(ledger, ct);
+            await walletRepo.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
     }
 
     public async Task ConfirmProvisionAsync(
         Guid ownerId, long amountKurus, string transactionId, CancellationToken ct = default)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var wallet = await walletRepo.GetByOwnerIdWithLockAsync(ownerId, ct)
-            ?? throw new NotFoundException("Wallet", ownerId);
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var wallet = await walletRepo.GetByOwnerIdWithLockAsync(ownerId, ct)
+                ?? throw new NotFoundException("Wallet", ownerId);
 
-        wallet.ConfirmProvision(amountKurus);
+            wallet.ConfirmProvision(amountKurus);
 
-        var ledger = WalletLedger.Create(wallet.Id, "CONFIRM", -amountKurus, wallet.AvailableBalance, transactionId);
-        await walletRepo.AddLedgerEntryAsync(ledger, ct);
-        await walletRepo.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+            var ledger = WalletLedger.Create(wallet.Id, "CONFIRM", -amountKurus, wallet.AvailableBalance, transactionId);
+            await walletRepo.AddLedgerEntryAsync(ledger, ct);
+            await walletRepo.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
     }
 
     public async Task ReleaseProvisionAsync(
         Guid ownerId, long amountKurus, string qrToken, CancellationToken ct = default)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var wallet = await walletRepo.GetByOwnerIdWithLockAsync(ownerId, ct)
-            ?? throw new NotFoundException("Wallet", ownerId);
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var wallet = await walletRepo.GetByOwnerIdWithLockAsync(ownerId, ct)
+                ?? throw new NotFoundException("Wallet", ownerId);
 
-        wallet.ReleaseProvision(amountKurus);
+            wallet.ReleaseProvision(amountKurus);
 
-        var ledger = WalletLedger.Create(wallet.Id, "RELEASE", amountKurus, wallet.AvailableBalance, qrToken);
-        await walletRepo.AddLedgerEntryAsync(ledger, ct);
-        await walletRepo.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+            var ledger = WalletLedger.Create(wallet.Id, "RELEASE", amountKurus, wallet.AvailableBalance, qrToken);
+            await walletRepo.AddLedgerEntryAsync(ledger, ct);
+            await walletRepo.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
     }
 }

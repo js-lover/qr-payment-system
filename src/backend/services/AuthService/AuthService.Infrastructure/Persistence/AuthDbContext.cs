@@ -48,7 +48,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
 
             // Aktif token arama için — revoke edilmemiş token'lar filtrelenir
             e.HasIndex(rt => rt.Token)
-             .HasFilter("is_revoked = 0")
+             .HasFilter("[IsRevoked] = 0")
              .HasDatabaseName("IX_refresh_tokens_token_active");
 
             e.HasIndex(rt => rt.UserId).HasDatabaseName("IX_refresh_tokens_user_id");
