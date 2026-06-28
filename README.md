@@ -1,231 +1,367 @@
 # QR Payment System
 
-Banka, Üye İşyeri (Merchant) ve Müşteri arasında güvenli, hızlı ve **QR kod tabanlı anlık ödeme altyapısı**. Finansal veriler QR kod içerisinde taşınmaz; bunun yerine 90 saniye ömrü olan dinamik UUID token'lar kullanılır. Sistem KVKK, MASAK (AML) ve PCI-DSS prensipleri gözetilerek tasarlanmıştır.
+Enterprise-grade QR ödeme sistemi. Mikroservis mimarisi, gerçek zamanlı ödeme akışı ve üç farklı istemci uygulaması.
 
 ---
 
-## Mimari Genel Bakış
+## Mimari
 
 ```
-Müşteri Mobil App
-        │
-        ▼
-Kong API Gateway (TLS 1.3 · RBAC · Rate Limit)
-        │
-        ├──▶ Auth Service
-        ├──▶ Onboarding Service
-        ├──▶ Wallet & Account Service
-        ├──▶ QR Code Service
-        ├──▶ Transaction Service
-        └──▶ Reporting & Reconciliation Service
-                      │
-              Apache Kafka (Event Bus)
-                      │
-              Elasticsearch (Raporlama)
-
-Transaction Service ──── ISO 8583 / TCP-TLS ────▶ Banka Core Sistemi
-QR Code Service    ──── WebSocket (SignalR) ────▶ POS / Kasa Ekranı
+┌───────────────────────────────────────────────────────────────┐
+│                          İstemciler                           │
+│  POS Terminal (Vite)  │  Mobil App (Expo)  │  Merchant Panel  │
+│       :5173           │  iOS / Android     │  (Next.js) :3000 │
+└──────────┬────────────────────┬─────────────────┬────────────┘
+           │                    │                 │
+           └────────────────────┼─────────────────┘
+                                ▼
+                    ┌───────────────────────┐
+                    │   Kong API Gateway    │  :8000
+                    │  Rate Limit · JWT     │  Admin: :8001
+                    │  CORS · Routing       │
+                    └──────────┬────────────┘
+                               │
+        ┌──────────────────────┼──────────────────────────┐
+        ▼                      ▼               ▼           ▼
+ ┌────────────┐  ┌──────────────────┐  ┌──────────┐  ┌──────────────┐
+ │    Auth    │  │   Onboarding     │  │  Wallet  │  │   QR Code    │
+ │  Service   │  │    Service       │  │  Service │  │   Service    │
+ │   :5282    │  │     :5138        │  │   :5265  │  │    :5020     │
+ └────────────┘  └──────────────────┘  └──────────┘  └──────────────┘
+        ▼                                                     ▼
+ ┌────────────────────────────────────────────────────────────────────┐
+ │                 Transaction Service  :5133                         │
+ │         Ödeme Orkestrasyon · ISO 8583 · SignalR Hub               │
+ └────────────────────────┬───────────────────────────────────────────┘
+                          │  Kafka Events
+                          ▼
+                ┌───────────────────────┐        ┌──────────────────┐
+                │   Reporting Service   │        │  Bank Simulator  │
+                │    (Elasticsearch)    │        │  ISO 8583 :9583  │
+                │        :5170          │        │     (TCP)        │
+                └───────────────────────┘        └──────────────────┘
 ```
 
-**Temel prensipler:**
-- **Mikroservis Mimarisi** — her servis kendi veritabanını yönetir, servisler arası doğrudan DB JOIN yapılmaz
-- **Event-Driven (Kafka)** — servisler Kafka event'leri üzerinden gevşek bağlı iletişim kurar
-- **Double-Entry Bookkeeping** — her finansal hareket DEBIT + CREDIT çiftiyle ACID garantisiyle yazılır
-- **Database-per-Service** — veri izolasyonu, bağımsız ölçekleme
+---
+
+## Ödeme Akışı
+
+```
+POS Terminal              Mobil Uygulama            Backend
+     │                          │                      │
+     ├── POST /qr/generate ─────────────────────────►  │  QR token üret (Redis, 90sn TTL)
+     │◄── {token, qrContent} ──────────────────────── │
+     │                          │                      │
+     │  [QR ekranda göster]     │                      │
+     │  [SignalR: qr:{token}]   │                      │
+     │                          ├── GET /qr/{t}/validate►│
+     │                          │◄── {tutar, işyeri} ─ │
+     │                          │                      │
+     │                          ├── POST /payments/confirm►│
+     │                          │                      ├─ QR claim (Redis SETNX)
+     │                          │                      ├─ Wallet provision
+     │                          │                      ├─ ISO 8583 → Bank Simulator
+     │                          │                      ├─ Wallet confirm / release
+     │                          │                      ├─ Kafka: payment.completed
+     │◄── SignalR: PaymentResult───────────────────── │  (POS gruba bildir)
+     │                          │◄── HTTP {status} ─── │  (Mobil HTTP yanıttan okur)
+     │  [ONAYLANDI / REDDEDİLDİ]│  [Başarılı / Hata]  │
+```
 
 ---
 
 ## Servisler
 
-### 1. Auth Service
-JWT (RS256 asimetrik imzalama) ve OAuth 2.0 tabanlı kimlik doğrulama merkezi. Private Key yalnızca bu serviste tutulur; diğer servisler Public Key ile token doğrular.
+| Servis | Port | Teknoloji | Açıklama |
+|--------|------|-----------|----------|
+| Auth Service | 5282 | .NET 10, SQL Server | JWT (RS256), BCrypt, TOTP, terminal HMAC auth |
+| Onboarding Service | 5138 | .NET 10, SQL Server | KYC, OTP doğrulama, merchant/terminal kayıt |
+| Wallet Service | 5265 | .NET 10, SQL Server | Çift girişli ledger, provision/confirm/release |
+| QR Code Service | 5020 | .NET 10, Redis | Token üretim, TTL yönetimi, claim (SETNX) |
+| Transaction Service | 5133 | .NET 10, SQL Server | Ödeme orkestrasyonu, ISO 8583, SignalR hub |
+| Reporting Service | 5170 | .NET 10, Elasticsearch | Kafka consumer, full-text arama |
+| Bank Simulator | 9583 | .NET 10, TCP | ISO 8583 auth simülatörü (belirleyici test kuralları) |
 
-- Access Token ömrü: **15 dakika**
-- Refresh Token ömrü: **7 / 30 gün**
-- POS terminal doğrulaması: **mTLS + HMAC-SHA256**
+### Altyapı
 
-### 2. Onboarding Service
-Yeni müşteri ve üye işyeri kayıt süreçlerini yönetir. KYC belgeleri AES-256 ile Blob Storage'da şifreli saklanır. MASAK uyumlu AML kontrolleri bu servis tarafından çalıştırılır.
-
-### 3. Wallet & Account Service
-Sistemin finansal çekirdeği. Bakiye yükleme (top-up), QR okutulduğunda tutarın geçici bloke edilmesi (provizyon) ve çift taraflı muhasebe kayıtları bu servise aittir.
-
-**Temel tablolar:**
-| Tablo | Açıklama |
-|---|---|
-| `wallets` | `balance` ve `blocked_balance` anlık takibi |
-| `ledger_entries` | Her harekete karşılık DEBIT + CREDIT çifti (BIGINT IDENTITY ile sıralı) |
-
-Finansal kayıtlar asla silinmez veya güncellenmez; ters kayıtla düzeltilir.
-
-### 4. QR Code Service
-Redis üzerinde 90 saniyelik TTL ile dinamik UUID QR token üretir. Token içinde finansal veri taşınmaz. QR okunduktan sonra tek kullanımlık hale getirilir; süresi dolunca Redis TTL mekanizmasıyla otomatik silinir.
-
-**Endpoint'ler:**
-- `POST /v1/qr/generate` — Terminal dinamik QR üretir
-- `GET /qr/validate/:token` — Müşteri QR geçerliliğini sorgular
-
-### 5. Transaction Service
-ISO 8583 formatında TCP/TLS soket bağlantısı üzerinden banka ana sistemiyle haberleşen ödeme çekirdeği. Timeout veya hata durumunda `0420 Auto-Reversal` mesajı otomatik tetiklenir.
-
-**Kafka event'leri:**
-- `payment.success` → Wallet Service blokeyi kesinleştirir, Reporting makbuz üretir
-- `payment.failed` → Wallet Service blokeyi serbest bırakır
-- `payment.reversed` → Çift taraflı ters kayıt atılır
-
-### 6. Reporting & Reconciliation Service
-Kafka event'lerini dinleyerek Elasticsearch 8'e yazar. MASAK zorunluluğuyla veriler **10 yıl** ILM politikasıyla saklanır. Her gece banka bakiyeleriyle cüzdan bakiyelerini karşılaştıran mutabakat (reconciliation) çalıştırılır.
-
-**Endpoint'ler:**
-- `GET /report/customer/statement`
-- `GET /report/merchant/daily-summary`
-- `GET /report/reconciliation`
+| Servis | Port | Kullanım |
+|--------|------|----------|
+| Kong API Gateway | 8000 / 8001 | Routing, rate limiting, CORS, JWT doğrulama |
+| SQL Server 2022 | 1433 | Auth, Onboarding, Wallet, Transaction veritabanları |
+| Redis 7 | 6379 | QR token cache (90sn TTL) |
+| Apache Kafka | 9092 | `payment.completed`, `payment.failed` event'leri |
+| Kafka UI | 8080 | Topic ve consumer group yönetimi |
+| Elasticsearch 8 | 9200 | İşlem indeksleme ve arama |
 
 ---
 
-## Teknoloji Yığını
+## İstemci Uygulamaları
 
-| Katman | Teknoloji | Neden |
-|---|---|---|
-| Backend | **.NET 10 (C#)** | Native AOT performansı, ekip yetkinliği |
-| Finansal DB | **MSSQL Server 2022** | ACID garantisi, DECIMAL(18,2) hassasiyeti |
-| Cache / TTL | **Redis 7** | 90s QR TTL, atomik operasyonlar, token blacklist |
-| Message Broker | **Apache Kafka** | Event replay, yüksek throughput, log-based yapı |
-| Arama / Raporlama | **Elasticsearch 8** | Full-text arama, ILM ile 10 yıl saklama |
-| Gerçek Zamanlı | **SignalR (WebSocket)** | POS ekranına milisaniyelik ödeme bildirimi |
-| API Gateway | **Kong** | Tek giriş noktası, RBAC, rate limiting |
-| Container | **Docker + Kubernetes** | Bağımsız ölçekleme, HPA, self-healing |
+### POS Terminal (`src/frontend/pos-terminal`)
+- React + Vite + TypeScript
+- Akış: Giriş → Tutar → QR Oluştur → Müşteri Tarasın → Sonuç
+- SignalR ile gerçek zamanlı ödeme sonucu (grup: `qr:{token}`)
+- Countdown timer + QR durum polling (2sn aralık)
 
----
+### Mobil Uygulama (`src/frontend/mobile-app`)
+- React Native + Expo SDK 54
+- Akış: Giriş → QR Tara → Tutarı Onayla → Ödeme
+- `expo-camera` ile QR tarama
+- Ödeme sonucu HTTP yanıtından doğrudan okunur (SignalR race condition yok)
 
-## Güvenlik Mimarisi
-
-| Katman | Yöntem |
-|---|---|
-| Tüm iletişim | TLS 1.3 |
-| Kullanıcı token | RS256 asimetrik JWT |
-| POS terminal | mTLS + HMAC-SHA256, Replay Attack koruması |
-| Parola saklama | BCrypt (cost=12) |
-| TCKN saklama | SHA-256 hash (düz metin yok) |
-| KYC belgeleri | AES-256 şifrelemeli Blob Storage |
-| Log maskeleme | Telefon numarası ve kişisel veriler maskelenir |
-| Yetkilendirme | RBAC + Row-Level Security (JWT'deki `wallet_id`) |
+### Merchant Panel (`src/frontend/merchant-panel`)
+- Next.js 15 + TypeScript + Tailwind CSS
+- İşlem listesi, özet kartlar (ciro, başarılı/başarısız sayısı)
+- Cookie tabanlı JWT oturum yönetimi
 
 ---
 
-## API Endpoint'leri (Özet)
+## Kurulum
 
-```
-POST   /auth/token                    # Token üretimi
-GET    /wallet/balance                # Bakiye sorgulama
-POST   /wallet/topup                  # Bakiye yükleme
-POST   /wallet/provision              # Provizyon / bloke koyma
-POST   /v1/qr/generate                # Dinamik QR üretimi
-GET    /qr/validate/:token            # QR doğrulama
-POST   /v1/payments/confirm           # ISO 8583 ödeme başlatma
-GET    /report/customer/statement     # Müşteri ekstresi
-GET    /report/merchant/daily-summary # İşyeri gün sonu
-GET    /report/reconciliation         # Günlük mutabakat
-```
+### Gereksinimler
 
----
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- [Node.js 20+](https://nodejs.org)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop)
+- iOS için: Xcode + [Expo Go](https://apps.apple.com/app/expo-go/id982107779) (v54)
 
-## Deployment
-
-Sıfır kesinti (zero-downtime) için Docker + Kubernetes. Multi-stage Dockerfile ile build imajı ağır SDK içerirken runtime imajı minimal tutulur.
-
-**5 Fazlı Yol Haritası:**
-
-| Faz | Kapsam |
-|---|---|
-| 1 | Temel altyapı: Auth Service, Kong Gateway, MSSQL |
-| 2 | QR üretimi, Wallet Service, Redis entegrasyonu |
-| 3 | Transaction Service, ISO 8583 banka ödeme akışı |
-| 4 | Kafka asenkron iletişim, SignalR kasa bildirimleri |
-| 5 | Elasticsearch raporlama, mutabakat, yük testleri, Go-live |
-
-**Kubernetes yapılandırması:**
-- HPA (Horizontal Pod Autoscaler) — CPU/bellek eşiğine göre otomatik ölçekleme
-- Readiness + Liveness probları
-- Her servis bağımsız namespace
-
----
-
-## Architecture Decision Records (ADR)
-
-| ADR | Karar | Gerekçe |
-|---|---|---|
-| ADR-001 | Mikroservis Mimarisi | Servisler farklı trafik yükü taşır; bağımsız ölçekleme gerekli |
-| ADR-002 | Apache Kafka | RabbitMQ'ya göre event replay ve log-based yapı avantajı |
-| ADR-003 | RS256 JWT | Diğer servislerin private key'i bilmemesi güvenlik izolasyonu sağlar |
-| ADR-004 | Custom ISO 8583 Parser | Banka spesifikasyonuna bağımlılık; karar PoC sonrası netleşecek |
-| ADR-005 | Redis (QR Token) | TTL ile otomatik silme, atomik operasyon, milisaniyelik hız |
-| ADR-006 | Kubernetes | Otomatik ölçekleme ve self-healing kabiliyeti |
-| ADR-007 | Elasticsearch | MSSQL'in yavaş kaldığı text-based aramalar ve ILM ile uzun süreli saklama |
-| ADR-008 | .NET 10 (C#) | Native AOT performansı ve ekip yetkinliği |
-
----
-
-## Dokümantasyon ve Yapay Zeka Entegrasyonu
-
-Bu proje, mimari tasarım ve dokümantasyon sürecinde **Claude (Anthropic)** ve **Google NotebookLM** entegrasyonundan yararlanmaktadır.
-
-### Nasıl Çalışıyor?
-
-```
-Proje Dosyaları (.md)
-        │
-        ▼
-  notebooklm-py CLI           Claude Code (Terminal)
-        │                              │
-        ▼                              ▼
-Google NotebookLM ◀────────── notebooklm ask / generate
-(16 kaynak, RAG motoru)
-        │
-        ├──▶ Doğal dil sorgulama (notebooklm ask "...")
-        ├──▶ Podcast, quiz, flashcard üretimi
-        ├──▶ İnfografik oluşturma
-        └──▶ Rapor ve study guide üretimi
-```
-
-**Claude Code** terminal üzerinden `notebooklm-py` CLI'ı yöneterek:
-- Proje dökümanlarını NotebookLM'e otomatik olarak yükler
-- NotebookLM'e doğal dil sorguları gönderir ve yanıtları koda/belgeye dönüştürür
-- Görsel içerik (infografik), ses içeriği (podcast) ve quiz gibi çıktılar üretir
-
-**Google NotebookLM** ise 16 markdown kaynaklarıyla beslenen bir **RAG (Retrieval-Augmented Generation)** motoru olarak çalışır. Mimari kararlar, servis detayları ve veri modellerine Claude Code üzerinden `notebooklm ask` komutuyla anlık erişilebilir.
-
-**Aktif notebook:** `QR Payment System — Full Documentation`
-- 16 kaynak (README dosyaları, sistem genel bakışı, araştırma notları)
-- Durum: Tüm kaynaklar `ready`
-
-**Örnek kullanım:**
-```bash
-# Servis hakkında soru sor
-notebooklm ask "Transaction Service ISO 8583 mesajlarını nasıl işliyor?"
-
-# İnfografik oluştur
-notebooklm generate infographic --orientation landscape --detail detailed
-
-# Podcast üret
-notebooklm generate audio "QR ödeme akışı üzerine teknik deep-dive"
-```
-
----
-
-## Geliştirme Ortamı
+### 1. Altyapıyı Başlat
 
 ```bash
-# NotebookLM CLI kurulu ise dokümanlara doğrudan sor
-export PATH="$HOME/bin:$PATH"
-notebooklm use 39faa48f-4583-4878-b7d5-6d93a912012d
-notebooklm ask "Wallet Service provizyon akışını açıkla"
+cd infra/docker
+docker compose up -d
 ```
 
-Detaylı kurulum için: [notebooklm-py](https://github.com/jgravelle/notebooklm-py)
+Tüm container'ların `healthy` durumuna gelmesini bekle (~30sn).
+
+### 2. Backend Servislerini Başlat
+
+Her servis için ayrı terminal:
+
+```bash
+cd src/backend/services/AuthService/AuthService.Api        && dotnet run &
+cd src/backend/services/OnboardingService/OnboardingService.Api && dotnet run &
+cd src/backend/services/WalletService/WalletService.Api    && dotnet run &
+cd src/backend/services/QrCodeService/QrCodeService.Api    && dotnet run &
+cd src/backend/services/BankSimulator                      && dotnet run &
+cd src/backend/services/TransactionService/TransactionService.Api && dotnet run &
+cd src/backend/services/ReportingService/ReportingService.Api    && dotnet run &
+```
+
+### 3. Kong API Gateway'i Yapılandır
+
+İlk kurulumda bir kez çalıştır (ayarlar PostgreSQL'de kalıcıdır):
+
+```bash
+for svc_route in \
+  "auth-service:5282:/auth" \
+  "onboarding-service:5138:/onboarding" \
+  "wallet-service:5265:/wallet" \
+  "qr-service:5020:/qr" \
+  "reporting-service:5170:/reports"; do
+  svc="${svc_route%%:*}"; rest="${svc_route#*:}"; port="${rest%%:*}"; path="${rest#*:}"
+  curl -s -X POST http://localhost:8001/services -d "name=$svc" -d "url=http://host.docker.internal:$port" > /dev/null
+  curl -s -X POST "http://localhost:8001/services/$svc/routes" -d "paths[]=$path" -d strip_path=false > /dev/null
+done
+
+# Transaction Service (çoklu path: /payments ve /hubs)
+curl -s -X POST http://localhost:8001/services -d name=transaction-service -d url=http://host.docker.internal:5133 > /dev/null
+curl -s -X POST http://localhost:8001/services/transaction-service/routes \
+  -d "paths[]=/payments" -d "paths[]=/hubs" -d strip_path=false > /dev/null
+
+# CORS (SignalR için credentials + explicit origins gerekli)
+curl -s -X POST http://localhost:8001/plugins \
+  -d name=cors \
+  -d "config.origins[]=http://localhost:5173" \
+  -d "config.origins[]=http://localhost:3000" \
+  -d "config.origins[]=http://localhost:8081" \
+  -d "config.methods[]=GET" -d "config.methods[]=POST" \
+  -d "config.methods[]=PUT" -d "config.methods[]=DELETE" \
+  -d "config.methods[]=OPTIONS" -d "config.methods[]=PATCH" \
+  -d "config.credentials=true" \
+  -d "config.max_age=3600" > /dev/null
+
+echo "Kong yapılandırması tamamlandı."
+```
+
+### 4. Frontend Uygulamalarını Başlat
+
+**POS Terminal:**
+```bash
+cd src/frontend/pos-terminal
+cp .env.local.example .env.local   # merchant bilgilerini düzenle
+npm install && npm run dev
+# http://localhost:5173
+```
+
+**Merchant Panel:**
+```bash
+cd src/frontend/merchant-panel
+npm install && npm run dev
+# http://localhost:3000
+```
+
+**Mobil Uygulama:**
+```bash
+cd src/frontend/mobile-app
+
+# Fiziksel cihaz için Mac'in LAN IP'sini yaz
+echo "EXPO_PUBLIC_API_BASE_URL=http://$(ipconfig getifaddr en0):8000" > .env.local
+
+npm install
+npx expo start --ios --clear
+```
+
+> Simulator için `.env.local` gerekli değil; `localhost:8000` doğrudan çalışır.
 
 ---
 
-## Lisans
+## Test Kullanıcıları
 
-Bu proje özel (proprietary) kullanım içindir.
+| Kullanıcı | Kullanıcı Adı | Şifre | Rol |
+|-----------|--------------|-------|-----|
+| Müşteri | `customer1` | `Customer123!` | CUSTOMER |
+| İşyeri Yöneticisi | `merchant1` | `Merchant123!` | MERCHANT |
+| Yönetici | `admin` | `Admin123!` | ADMIN |
+
+**Test senaryosu:**
+1. POS Terminal'e `merchant1 / Merchant123!` ile giriş yap
+2. Tutar gir → QR oluştur
+3. Mobil uygulamaya `customer1 / Customer123!` ile giriş yap → QR tara → Öde
+4. Merchant Panel'de `merchant1` ile işlemleri izle
+
+---
+
+## API Referansı
+
+Tüm istekler `http://localhost:8000` (Kong) üzerinden yapılır.
+
+### Auth — `/auth`
+
+| Method | Endpoint | Açıklama |
+|--------|----------|----------|
+| POST | `/auth/token` | Giriş (JWT access + refresh token) |
+| POST | `/auth/refresh` | Access token yenile |
+| POST | `/auth/revoke` | Refresh token iptal et |
+| POST | `/auth/totp/setup` | TOTP 2FA kurulumu |
+| POST | `/auth/totp/verify` | TOTP kodu doğrula |
+| POST | `/auth/terminal/challenge` | Terminal HMAC challenge |
+
+### QR Code — `/qr`
+
+| Method | Endpoint | Yetki | Açıklama |
+|--------|----------|-------|----------|
+| POST | `/qr/generate` | TERMINAL/MERCHANT/ADMIN | QR token üret (90sn TTL) |
+| GET | `/qr/{token}/validate` | CUSTOMER | QR bilgilerini al |
+| POST | `/qr/{token}/claim` | CUSTOMER | QR'ı atomik olarak claim et |
+| GET | `/qr/{token}/status` | TERMINAL/MERCHANT/ADMIN | QR durumu (PENDING/CLAIMED/EXPIRED) |
+
+### Wallet — `/wallet`
+
+| Method | Endpoint | Açıklama |
+|--------|----------|----------|
+| GET | `/wallet/balance` | Bakiye sorgula |
+| POST | `/wallet/topup` | Bakiye yükle (ADMIN) |
+| POST | `/wallet/provision` | Tutarı bloke et |
+| POST | `/wallet/confirm` | Blokajı onayla |
+| POST | `/wallet/release` | Blokajı serbest bırak |
+
+### Payments — `/payments`
+
+| Method | Endpoint | Yetki | Açıklama |
+|--------|----------|-------|----------|
+| POST | `/payments/confirm` | CUSTOMER | Ödemeyi başlat — nihai sonucu HTTP yanıtında döner |
+| GET | `/payments/{id}` | Bearer | İşlem durumu sorgula |
+
+### Reports — `/reports`
+
+| Method | Endpoint | Yetki | Açıklama |
+|--------|----------|-------|----------|
+| GET | `/reports/my-transactions` | CUSTOMER | Kişisel işlem geçmişi |
+| GET | `/reports/transactions` | ADMIN/MERCHANT | Filtreli işlem listesi |
+
+### SignalR Hub — `/hubs/payment`
+
+POS terminal, QR oluşturulunca `qr:{token}` grubuna katılır. Ödeme tamamlandığında `PaymentResult` eventi yayınlanır:
+
+```json
+{
+  "transactionId": "uuid",
+  "status": "COMPLETED",
+  "responseCode": "00"
+}
+```
+
+---
+
+## Bank Simulator (ISO 8583)
+
+TCP bağlantısı, port **9583**. Belirleyici test kuralları:
+
+| Koşul | Sonuç |
+|-------|-------|
+| Tutar ≤ 10 TL | Her zaman APPROVED (`00`) |
+| 10 TL < Tutar < 1000 TL | %90 APPROVED / %10 DECLINED (`51`) |
+| Tutar ≥ 1000 TL | %30 APPROVED / %70 DECLINED |
+| MaskedPan `****0000` | Her zaman DECLINED (test kart) |
+| MaskedPan `****9999` | Her zaman APPROVED (test kart) |
+
+---
+
+## Proje Yapısı
+
+```
+qr-payment-system/
+├── src/
+│   ├── backend/
+│   │   ├── services/
+│   │   │   ├── AuthService/
+│   │   │   ├── OnboardingService/
+│   │   │   ├── WalletService/
+│   │   │   ├── QrCodeService/
+│   │   │   ├── TransactionService/
+│   │   │   ├── ReportingService/
+│   │   │   └── BankSimulator/
+│   │   └── shared/
+│   │       ├── QrPayment.Shared/        # ApiResponse, exceptions, middleware
+│   │       ├── QrPayment.Contracts/     # Servisler arası DTO'lar
+│   │       └── QrPayment.Kafka/         # Producer, consumer, events, topics
+│   └── frontend/
+│       ├── pos-terminal/                # React + Vite
+│       ├── mobile-app/                  # React Native + Expo SDK 54
+│       └── merchant-panel/              # Next.js 15
+├── infra/
+│   ├── docker/
+│   │   └── docker-compose.yml
+│   └── kong/
+│       └── kong.yml                     # Declarative config (referans)
+├── database/
+│   └── seeds/
+│       └── dev_seed.sql
+└── .github/
+    └── workflows/
+        └── backend-ci.yml               # Build + test pipeline
+```
+
+---
+
+## CI/CD
+
+GitHub Actions (`.github/workflows/backend-ci.yml`):
+1. NuGet package cache
+2. `dotnet restore`
+3. `dotnet build --configuration Release`
+4. `dotnet test` (xUnit)
+5. Test sonuçları artifact olarak yüklenir
+
+---
+
+## Teknik Notlar
+
+**Senkron ödeme akışı** — `POST /payments/confirm` tüm adımları (provision → bank auth → kafka → SignalR) senkron işler ve HTTP yanıtında nihai statüsü döndürür. Mobil uygulama SignalR beklemez; HTTP yanıtını okur. POS terminal SignalR ile bildirim alır çünkü QR ekranında pasif bekliyor.
+
+**QR claim'de Redis SETNX** — Aynı QR'ın iki farklı müşteri tarafından eş zamanlı ödenmesini engellemek için atomik SETNX operasyonu kullanılır. Race condition garantisi verir.
+
+**Çift girişli ledger** — Wallet Service'te her finansal hareket hem debit hem credit kaydı olarak tutulur. Provision/release döngüsü ile yarım kalan ödemelerde bakiye tutarsızlığı önlenir.
+
+**Kong CORS + SignalR** — `Access-Control-Allow-Origin: *`, SignalR negotiate isteğinin `Authorization` header'ı ile uyumsuz. Explicit origin listesi ve `credentials: true` zorunlu. `config.headers` boş bırakıldığında Kong preflight'ta istenen tüm header'ları echo eder.
